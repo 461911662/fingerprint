@@ -6,7 +6,7 @@
 #define SERVER_IP   "192.168.1.100" /* stream sock1 default */
 #define CLIENT_IP   "192.168.1.100" /* dgram sock default */
 #else
-#define SERVER_IP   "192.168.1.101" /* stream sock1 default */
+#define SERVER_IP   "192.168.1.103" /* stream sock1 default */
 #define CLIENT_IP   "192.168.1.100" /* dgram sock default */
 #endif
 
