@@ -12,8 +12,16 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
- 
- 
+
+typedef struct Errorinfo
+{
+    unsigned int errorid;
+    char *info;
+    char *definfo;
+}ERRORINFO_S;
+
+extern char *toupcamerrinfo(unsigned int uiCallbackContext);
+
 int debug(char *, ...);
 int fail(char *, ...);
 int warn(char *, ...);

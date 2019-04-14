@@ -3,10 +3,19 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include "../include/codeimg.h"
+#include "../include/wificfg.h"
+#include "../include/toupcamcfg.h"
+#include "../include/libavutil/frame.h"
+#include "../include/common_toupcam.h"
+
+
+using namespace std;
 
 extern "C"
 {
 #include "../include/x264.h"
+
 #include "../include/libavcodec/avcodec.h"
 #include "../include/libavformat/avformat.h"
 #include "../include/libswscale/swscale.h"
@@ -15,12 +24,12 @@ extern "C"
 #include "../include/rtp.h"
 #include "../include/Error.h"
 #include "../include/socket.h"
-#include "../include/codeimg.h"
-#include "../include/wificfg.h"
+
+
 #include "../include/toupcam.h"
 #include "../include/jpeglib.h"
-#include "../include/toupcamcfg.h"
-#include "../include/common_toupcam.h"
+
+
 };
 
 #define H264  /* 使用h264软件编码 */
@@ -76,7 +85,9 @@ unsigned int PreInitialDevice(void *pvoid)
         iRet = Toupcam_put_eSize(pTmpToupcam->m_hcam, iRSL_Num-1);  /* 预览适配最小分辨率 */
         iRet += Toupcam_get_Resolution(pTmpToupcam->m_hcam, iRSL_Num-1, &iWidth, &iHeight);
         iRet += Toupcam_get_Resolution(pTmpToupcam->m_hcam, 0, &iMaxWidth, &iMaxHeight);  /* 抓拍适配最大分辨率 */
-        
+
+        nWidth = iWidth;
+        nHeight = iHeight;        
         pTmpToupcam->inWidth = iWidth;
         pTmpToupcam->inHeight = iHeight;
         pTmpToupcam->inMaxWidth = iMaxWidth;
@@ -96,6 +107,13 @@ unsigned int PreInitialDevice(void *pvoid)
         return ERROR_FAILED;
     }
 
+    /* 设置Toupcam自动曝光 */
+    //iRet = SetAutoExpo_Toupcam();
+    if(ERROR_FAILED == iRet)
+    {
+        return ERROR_FAILED;
+    }
+
     return ERROR_SUCCESS;
 }
 
@@ -108,13 +126,13 @@ unsigned int OpenDevice(void *pvoid)
     }
     TOUPCAM_S *pTmpToupcam = (TOUPCAM_S *)pvoid;
     
-    HToupCam m_hcam = Toupcam_Open(NULL);
-    if(NULL == m_hcam)
+    g_hcam = Toupcam_Open(NULL);
+    if(NULL == g_hcam)
     {
-        printf("Toupcam_Open failed.\n");
+        printf("no Toupcam device.\n");
         return ERROR_FAILED;
     }
-    pTmpToupcam->m_hcam = m_hcam;
+    pTmpToupcam->m_hcam = g_hcam;
 
     return ERROR_SUCCESS;
 }
@@ -235,6 +253,7 @@ int setToupcamDefaultCfg()
 unsigned int SetupToupcam(TOUPCAM_S* pToupcam)
 {
     int iRet = ERROR_SUCCESS;
+    unsigned int uiCallbackContext = 0;
     if(NULL == pToupcam)
     {
         printf("%s: pTmpToupcam is null.\n", __func__);
@@ -266,7 +285,7 @@ unsigned int SetupToupcam(TOUPCAM_S* pToupcam)
         g_pImageData = malloc(pToupcam->m_header.biSizeImage);
         if(NULL == g_pImageData)
         {
-            perror("SetupToupcam g_pImageData: ");
+            perror("SetupToupcam g_pImageData");
             return ERROR_FAILED;
         }
     }
@@ -283,30 +302,30 @@ unsigned int SetupToupcam(TOUPCAM_S* pToupcam)
         g_pStaticImageData = malloc(pToupcam->iSnapSize);
         if(NULL == g_pStaticImageData)
         {
-            perror("SetupToupcam g_pStaticImageData: ");
+            perror("SetupToupcam g_pStaticImageData");
             return ERROR_FAILED;
         }
     }
     pToupcam->m_PStaticImageData = g_pStaticImageData;
-    
-
-    /* 设置Toupcam自动曝光 */
-    iRet = SetAutoExpo_Toupcam();
-    if(ERROR_FAILED == iRet)
-    {
-        return ERROR_FAILED;
-    }
 
     av_register_all();
 
     initX264Encoder(x264Encoder,"myCamera.h264");
 
     printf("pTmpToupcam->inWidth:%d, pTmpToupcam->inHeight:%d\n", g_pstTouPcam->inWidth, g_pstTouPcam->inHeight);
+    printf("pTmpToupcam->inMaxWidth:%d, pTmpToupcam->inMaxHeight:%d\n", g_pstTouPcam->inMaxWidth, g_pstTouPcam->inMaxHeight);
 
     /* 开启拉模式视频 */
-    iRet = Toupcam_StartPullModeWithCallback(pToupcam->m_hcam, EventCallback, NULL);
+    iRet = Toupcam_StartPullModeWithCallback(pToupcam->m_hcam, EventCallback, &uiCallbackContext);
     if (FAILED(iRet))
+    {
         printf("failed to start camera, hr = %08x\n", iRet);
+    }
+    else if(uiCallbackContext)
+    {
+        printf("Toupcam Event(%d):", uiCallbackContext);
+        return toupcamerrinfo(uiCallbackContext)?ERROR_FAILED:ERROR_SUCCESS;
+    }
     else
     {
         printf("press any key to exit\n");

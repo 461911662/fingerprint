@@ -10,15 +10,15 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/select.h>
+#include "../include/socket.h"
+#include "../include/x264.h"
+#include "../include/codeimg.h"
+#include "../include/rtp.h"
+#include "../include/toupcam.h"
+#include "../include/common_toupcam.h"
 
-extern "C"
-{
-    #include "../include/codeimg.h"
-    #include "../include/rtp.h"
-    #include "../include/toupcam.h"
-    #include "../include/common_toupcam.h"
-    #include "../include/socket.h"
-}
+//using namespace cv;
+using namespace std;
 
 
 struct sockets *sock; /* udp potr:5004 */
@@ -34,12 +34,7 @@ struct rtp_pack *rtp;
 //创建rtp头
 struct rtp_pack_head head;
 
-int sendnum = 0;
-
-#define VENC_FPS 30
-
-//using namespace cv;
-using namespace std;
+int sendnum = 0; /* 当前已发rtp数据包数量 */
 
 HToupCam g_hcam = NULL;
 void* g_pImageData = NULL;
@@ -55,7 +50,6 @@ int WIDTH = 0, HEIGHT = 0;
 /* support for jpeg transmit */
 unsigned char *gpucJpgDest = NULL;//[1024*1022];
 int giJpgSize=1024*1022;
-#define RGB24_DEPTH  (3)
 
 /* 线程 */
 #define MaxThreadNum      (4)
@@ -67,48 +61,70 @@ extern void Destory_sock(void);
 
 void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx)
 {
-    if (TOUPCAM_EVENT_IMAGE == nEvent)
+    HRESULT hr;
+    ToupcamFrameInfoV2 info = { 0 };
+    unsigned int *puiCallbackCtx = (unsigned int *)pCallbackCtx;
+    *puiCallbackCtx = 0;
+
+    switch(nEvent)
     {
-        ToupcamFrameInfoV2 info = { 0 };
-        memset(g_pImageData, 0, sizeof(g_pstTouPcam->m_header.biSizeImage));
-        HRESULT hr = Toupcam_PullImageV2(g_hcam, g_pImageData, 24, &info);
-#ifdef H264
-        if (FAILED(hr))
-            printf("failed to pull image, hr = %08x\n", hr);
-        else
-        {
-            /* After we get the image data, we can do anything for the data we want to do */
-            printf("pull image ok, total = %u, resolution = %u x %u\n", ++g_total, info.width, info.height);
-            if(frame_num == 0)
+        case TOUPCAM_EVENT_IMAGE:
+            memset(g_pImageData, 0, sizeof(g_pstTouPcam->m_header.biSizeImage));
+            hr = Toupcam_PullImageV2(g_hcam, g_pImageData, 24, &info);
+            
+            if (FAILED(hr))
+                printf("failed to pull image, hr = %08x\n", hr);
+            else
             {
-                encode_yuv((unsigned char *)g_pImageData);
-                frame_num = 0;
-            }else
-            {
-                frame_num++;
+                
+                /* After we get the image data, we can do anything for the data we want to do */
+                /* printf("pull image ok, total = %u, resolution = %u x %u\n", ++g_total, info.width, info.height); */
+                if(frame_num == 0)
+                {
+                    encode_yuv((unsigned char *)g_pImageData);
+                    frame_num = 0;
+                }else
+                {
+                    frame_num++;
+                }
             }
-        }
-#else
-        encode_jpeg((unsigned char *)g_pImageData);
-#endif        
-    }
-    else if(TOUPCAM_EVENT_STILLIMAGE == nEvent)
-    {
-        ToupcamFrameInfoV2 info = { 0 };
-        memset(g_pStaticImageData, 0, sizeof(g_pstTouPcam->m_header.biSizeImage));
-        HRESULT hr = Toupcam_PullImageV2(g_hcam, g_pStaticImageData, 24, &info);
-        if (FAILED(hr))
-            printf("failed to pull image, hr = %08x\n", hr);
-        else
-        {
-            /* After we get the image data, we can do anything for the data we want to do */
-            printf("pull image ok, total = %u, resolution = %u x %u\n", ++g_total, info.width, info.height);
-            encode_jpeg((unsigned char *)g_pStaticImageData);
-        }
-    }
-    else
-    {
-        printf("event callback: %d\n", nEvent);
+            break;
+        case TOUPCAM_EVENT_STILLIMAGE:
+            memset(g_pStaticImageData, 0, sizeof(g_pstTouPcam->m_header.biSizeImage));
+            hr = Toupcam_PullImageV2(g_hcam, g_pStaticImageData, 24, &info);
+            if (FAILED(hr))
+                printf("failed to pull image, hr = %08x\n", hr);
+            else
+            {
+                /* After we get the image data, we can do anything for the data we want to do */
+                printf("pull image ok, total = %u, resolution = %u x %u\n", ++g_total, info.width, info.height);
+                encode_jpeg((unsigned char *)g_pStaticImageData);
+            }
+            break;
+        case TOUPCAM_EVENT_EXPOSURE:     /* exposure time changed */
+        case TOUPCAM_EVENT_TEMPTINT:     /* white balance changed, Temp/Tint mode */
+        case TOUPCAM_EVENT_WBGAIN:       /* white balance changed, RGB Gain mode */
+        case TOUPCAM_EVENT_TRIGGERFAIL:  /* trigger failed */
+        case TOUPCAM_EVENT_BLACK:        /* black balance changed */
+        case TOUPCAM_EVENT_FFC:          /* flat field correction status changed */
+        case TOUPCAM_EVENT_DFC:          /* dark field correction status changed */
+            printf("toupcam event: %d\n", nEvent);
+            break;
+        case TOUPCAM_EVENT_ERROR:        /* generic error */
+            *puiCallbackCtx = TOUPCAM_EVENT_ERROR;
+            break;
+        case TOUPCAM_EVENT_DISCONNECTED: /* camera disconnected */
+            *puiCallbackCtx = TOUPCAM_EVENT_DISCONNECTED;
+            break;
+        case TOUPCAM_EVENT_TIMEOUT:      /* timeout error */
+            *puiCallbackCtx = TOUPCAM_EVENT_TIMEOUT;
+            break;
+        case TOUPCAM_EVENT_FACTORY:      /* restore factory settings */
+            *puiCallbackCtx = TOUPCAM_EVENT_FACTORY;
+            break;            
+        default:
+            printf("unknown event: %d\n", nEvent);
+            break;
     }
 }
 
@@ -137,12 +153,12 @@ void *pthread_server(void *pdata)
 		iRet = select(iMaxfd+1, &tmprdfs, NULL, NULL, &tv);
 		if(iRet == 0)
 		{
-			printf("select time out.\n");
+			//printf("select time out.\n");
 			continue;
 		}
 		else if(iRet < 0)
 		{
-			printf("select fail.\n");
+			//printf("select fail.\n");
 			continue;
 		}
 		for(i = 0; i < iServerFd+1; i++)
@@ -154,7 +170,7 @@ void *pthread_server(void *pdata)
 					iClientFd = accept(iServerFd, &stClientaddr, &addrlen);
 					if(iClientFd < 0)
 					{
-						perror("stream accept: ");
+						perror("stream accept");
 						continue;
 					}
 					if(iClientFd > iMaxfd)
@@ -191,16 +207,76 @@ void *pthread_health_monitor(void *pdata)
 	return NULL;
 }
 
+void Destory_sock(void)
+{
+    if(sock)
+    {
+        close(sock->local);
+        free(sock);
+        sock = NULL;
+        printf("destory dgram sock...\n");
+    }
+    if(sock1)
+    {
+        close(sock1->local);
+        free(sock1);
+        sock1 = NULL;
+        printf("destory stream sock...\n");
+    }
+}
 
-int init_sock()
+void Destory_Toupcam(void)
+{
+    if(g_hcam)
+    {
+        Toupcam_Close(g_hcam);
+        g_hcam = NULL;
+    }
+    
+    if(g_pImageData)
+    {
+        free(g_pImageData);
+        g_pImageData = NULL;
+    }
+    
+    if(g_pStaticImageData)
+    {
+        free(g_pStaticImageData);
+        g_pStaticImageData = NULL;
+    }
+
+    if(g_pstTouPcam)
+    {
+        free(g_pstTouPcam);
+        g_pstTouPcam = NULL;
+    }
+        
+}
+
+int init_sock(void)
 {
     int iRet = ERROR_SUCCESS;
     
     /* step 1 init dgram */
-    (void)socket_dgram_init();
-    
+    iRet = socket_dgram_init();
+    if(ERROR_SUCCESS == iRet)
+    {
+        printf("dgram sock init is ok.\n");
+    }
+    else
+    {
+        printf("dgram sock init is not ok.\n");
+    }
     /* step 2 init stream */
-    (void)socket_stream_init();
+    iRet = socket_stream_init();
+    if(ERROR_SUCCESS == iRet)
+    {
+        printf("stream sock init is ok.\n");
+    }
+    else
+    {
+        printf("stream sock init is not ok.\n");
+    }
 
 	return iRet;
 }
@@ -229,6 +305,7 @@ int main(int, char**)
     {
         goto exit1_;
     }
+    printf("init Toupcam callback.\n");
     
     /* 安装一个Toupcam摄像头设备 */
     iRet = SetupToupcam(g_pstTouPcam);
@@ -237,20 +314,11 @@ int main(int, char**)
         goto exit1_;
     }
 
-    /* cleanup */
-    Toupcam_Close(g_hcam);
-    if(g_pImageData)
-        free(g_pImageData);
-        g_pImageData = NULL;
-    if(g_pStaticImageData)
-        free(g_pStaticImageData);
-        g_pStaticImageData = NULL;
 
 exit1_:
-    //Destory_sock();
-    //Destory_Toupcam();
+    Destory_Toupcam();
 exit0_:
-    //Destory_sock();
+    Destory_sock();
 
     return 0;
 }

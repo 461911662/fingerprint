@@ -127,6 +127,8 @@ typedef struct Com_Entry
 extern COM_ENTRY_S g_Comm_Entry[];
 
 extern TOUPCAM_S* g_pstTouPcam;
+extern HToupCam g_hcam;
+extern int nWidth, nHeight;
 extern void* g_pImageData;
 extern void* g_pStaticImageData;
 extern int g_pStaticImageDataFlag;
@@ -138,8 +140,6 @@ extern unsigned int init_Toupcam(void);
 extern unsigned int SetupToupcam(TOUPCAM_S* pToupcam);
 extern void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx);
 extern void* getToupcam(void);
-
-extern void Destory_Toupcam(void);
 
 
 #endif

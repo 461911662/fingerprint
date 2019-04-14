@@ -9,14 +9,14 @@
 #include "../include/socket.h"
  
  
-//创建rtp包
+/* 创建rtp包 */
 void *creat_rtp_pack(struct rtp_data *data)
 {
     unsigned char *buf;
-    //数据长度检测，数据长度大于最大包长，则分包。
+    /* 数据长度检测，数据长度大于最大包长，则分包。*/
     if(data->datalen>MAX_PACK_LEN&&data->datalen>(data->bufrelen+data->rtpdatakcount))
     {
-        //分包
+        /* 分包 */
          
         unsigned int templen=(data->datalen-data->bufrelen-1);
         data->rtpdatakcount+=1;
@@ -26,15 +26,17 @@ void *creat_rtp_pack(struct rtp_data *data)
             memset(buf,0,MAX_PACK_LEN);
             if(data->bufrelen==0)
             {
-                //第一个分包
+                /* 第一个分包 */
                 memcpy((buf+RTP_HEAD_LEN+1), ((unsigned char*)data->buff+data->offset), (MAX_PACK_LEN-RTP_HEAD_LEN-1));
                 data->rtp_fui=((*(buf+RTP_HEAD_LEN+1)&0xE0));
                 data->rtp_fuh=(*(buf+RTP_HEAD_LEN+1)&0x1f);
                 *(buf+RTP_HEAD_LEN+1)=(data->rtp_fuh|(0x80));
                 data->bufrelen+=MAX_PACK_LEN;
                 data->offset+=MAX_PACK_LEN-RTP_HEAD_LEN-1;
-            }else{
-                //中间分包
+            }
+            else
+            {
+                /* 中间分包 */
                 memcpy((buf+RTP_HEAD_LEN+2),((unsigned char*)data->buff+data->offset),(MAX_PACK_LEN-RTP_HEAD_LEN-2));
                 *(buf+RTP_HEAD_LEN+1)=(data->rtp_fuh|(0x00));
                 data->bufrelen+=MAX_PACK_LEN;
@@ -43,8 +45,10 @@ void *creat_rtp_pack(struct rtp_data *data)
  
             *(buf+RTP_HEAD_LEN)=(data->rtp_fui|(0x1c));
  
-        }else{
-            //最后一个分包
+        }
+        else
+        {
+            /* 最后一个分包 */
             templen=data->datalen-data->offset;
             buf=(unsigned char *)malloc(templen+RTP_HEAD_LEN+2);
             memset(buf,0,templen+RTP_HEAD_LEN+2);
@@ -54,16 +58,20 @@ void *creat_rtp_pack(struct rtp_data *data)
             data->bufrelen+=templen+RTP_HEAD_LEN+2;
             data->offset+=templen-1;
         }
-    }else if(data->datalen>data->bufrelen){
-        //数据长度小于包长，则不分包
+    }
+    else if(data->datalen>data->bufrelen)
+    {
+        /* 数据长度小于包长，则不分包 */
         buf=(unsigned char *)malloc(data->datalen+RTP_HEAD_LEN);
         memset(buf,0,data->datalen+RTP_HEAD_LEN);
  
         memcpy((buf+RTP_HEAD_LEN),data->buff,data->datalen);
         data->bufrelen+=data->datalen+RTP_HEAD_LEN;
-    }else
+    }
+    else
+    {
         return NULL;
- 
+    }
     return buf;
 }
  
@@ -73,21 +81,23 @@ struct rtp_pack *rtp_pack(struct rtp_data *pdata,struct rtp_pack_head *head)
     char *rtp_buff;
     int len=pdata->bufrelen;
  
-    //获取封包后的rtp数据包
+    /* 获取封包后的rtp数据包 */
     rtp_buff=(char *)creat_rtp_pack(pdata);
      
     struct rtp_pack *pack;
 
     if(rtp_buff!=NULL)
     {
-        //固定头部填充
+        /* 固定头部填充 */
         SET_RTP_FIXHEAD();
  
-        //创建rtp_pack结构
+        /* 创建rtp_pack结构 */
         pack=(struct rtp_pack *)malloc(sizeof(struct rtp_pack));
         pack->databuff=rtp_buff;
         pack->packlen=pdata->bufrelen-len;
-    }else{
+    }
+    else
+    {
         free(pdata->buff);
         pdata->buff=NULL;
         return NULL;
@@ -173,11 +183,11 @@ void *getdata(FILE *file)
     return rtp_data;
 }
  
-//rtp数据包发送
+/* rtp数据包发送 */
 char rtp_send(struct rtp_pack *rtp,struct sockets *sock)
 {
     int num=0;
-    //通过网络将数据发送出去
+    /* 通过网络将数据发送出去 */
     if((num=sendto(sock->local,rtp->databuff,rtp->packlen,0,(struct sockaddr *)sock->cliaddr,sizeof(struct sockaddr_in)))==-1)
     {
         fail("socket: %s\n", strerror(errno));
@@ -191,9 +201,10 @@ char rtp_send(struct rtp_pack *rtp,struct sockets *sock)
     }
     printf("\r\n");
     */
-    //debug("number is : %d packlen is : %d\n", num, rtp->packlen);
-    //释放缓冲区
-     free(rtp->databuff);
-     rtp->databuff=NULL;
-     return 0;
+    /* debug("number is : %d packlen is : %d\n", num, rtp->packlen); */
+    /* 释放缓冲区 */
+    free(rtp->databuff);
+    rtp->databuff=NULL;
+
+    return 0;
 }
