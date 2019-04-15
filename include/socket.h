@@ -7,11 +7,11 @@
 #define CLIENT_IP   "192.168.1.100" /* dgram sock default */
 #else
 #define SERVER_IP   "192.168.1.101" /* stream sock1 default */
-#define CLIENT_IP   "192.168.1.100" /* dgram sock default */
+#define CLIENT_IP   "192.168.1.104" /* dgram sock default */
 #endif
 
 #define UDP_PORT  5004
-#define TCP_PORT  5005
+#define TCP_PORT  9999
 #define TCP_LISTEN_NUM 10
 #define TCP_BUFFER_SIZE  1024
 #define TCP_REQUEST 0x01

@@ -118,9 +118,12 @@ int encode_jpeg(unsigned char *pucImageData)
         return ERROR_FAILED;
     }
 
+    int iRet = ERROR_SUCCESS;
+
     pthread_mutex_lock(&g_PthreadMutexJpgDest);
 
-    int iRet = ERROR_SUCCESS;
+
+
     struct jpeg_compress_struct stcinfo;
     struct jpeg_error_mgr stjerr;
     FILE *pfile = NULL;
@@ -133,9 +136,11 @@ int encode_jpeg(unsigned char *pucImageData)
     stcinfo.err = jpeg_std_error(&stjerr);
     jpeg_create_compress(&stcinfo);
 
+
     /* step 2 */
     giJpgSize = 0;
     jpeg_mem_dest(&stcinfo, &g_pucJpgDest, (unsigned long *)&giJpgSize);
+
 
     /* step 3 */
     stcinfo.image_width = g_pstTouPcam->inMaxWidth;
@@ -149,15 +154,18 @@ int encode_jpeg(unsigned char *pucImageData)
     jpeg_start_compress(&stcinfo, TRUE);
     row_stride = g_pstTouPcam->inMaxWidth;
 
+
     while (stcinfo.next_scanline < stcinfo.image_height)
     {
         row_pointer[0] = & pucImageData[stcinfo.next_scanline * row_stride*RGB24_DEPTH];
         (void) jpeg_write_scanlines(&stcinfo, row_pointer, 1);
     }
 
+
     /* step 5 */
     jpeg_finish_compress(&stcinfo);
     jpeg_destroy_compress(&stcinfo);
+
 
     if(g_pStaticImageDataFlag)
     {
@@ -165,7 +173,7 @@ int encode_jpeg(unsigned char *pucImageData)
     }
     g_pStaticImageDataFlag = 1;
     pthread_mutex_unlock(&g_PthreadMutexJpgDest);
-    
+ 
     return iRet;
 }
 
@@ -209,7 +217,7 @@ void encoderImg(X264Encoder &x264Encoder,AVFrame *frame)
         memcpy(rtpdata, x264Encoder.m_pX264Nals[i].p_payload, pdata->datalen);
         pdata->buff=rtpdata;
     	pdata->bufrelen=0;
-		printf("buff len : %d\r\n", pdata->datalen);
+		//printf("buff len : %d\r\n", pdata->datalen);
 
 		/* 数据封包 */
     	while((rtp=rtp_pack(pdata,&head))!=NULL)

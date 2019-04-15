@@ -22,17 +22,18 @@ void common_hander(int fd, char *pBuff, unsigned short ucSize)
 
     int i, j;
     int iRet = 0;
-    
+    printf("request: cmd:%c,subcmd:%hd", *pBuff, *(unsigned short*)(pBuff+1));
     for(i = 0; i < g_Comm_Entry_Size; i++)
     {
         if(*pBuff == g_Comm_Entry[i].cmd_id)
         {
             iRet = g_Comm_Entry[i].handle(fd, pBuff+1, ucSize-1);
             printf("request: cmd:%c,subcmd:%hd", *pBuff, *(unsigned short*)(pBuff+1));
+            /*
             for(j=2; j<ucSize; j++)
             {
                 printf(" %c", pBuff[i]);
-            }
+            }*/
             printf("cc:%d\n", iRet);
         }
     }

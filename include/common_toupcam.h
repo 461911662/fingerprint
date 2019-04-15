@@ -43,14 +43,14 @@ typedef struct Toupcam_common_header
     char type;
     char cmd;
     unsigned short subcmd;
-}TOUPCAM_COMMON_HEADER_S;
+}__attribute__((packed))TOUPCAM_COMMON_HEADER_S;
 
 typedef struct Toupcam_common_respon
 {
     TOUPCAM_COMMON_HEADER_S com;
     char cc;
     char *pdata;
-}TOUPCAM_COMMON_RESPON_S;
+}__attribute__((packed))TOUPCAM_COMMON_RESPON_S;
 
 
 

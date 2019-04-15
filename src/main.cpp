@@ -91,15 +91,29 @@ void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx)
             }
             break;
         case TOUPCAM_EVENT_STILLIMAGE:
+            printf("toupcam event TOUPCAM_EVENT_STILLIMAGE(%d).\n", nEvent);
             memset(g_pStaticImageData, 0, sizeof(g_pstTouPcam->m_header.biSizeImage));
-            hr = Toupcam_PullImageV2(g_hcam, g_pStaticImageData, 24, &info);
+            hr = Toupcam_PullStillImageV2(g_hcam, g_pStaticImageData, 24, &info);
             if (FAILED(hr))
                 printf("failed to pull image, hr = %08x\n", hr);
             else
             {
                 /* After we get the image data, we can do anything for the data we want to do */
-                printf("pull image ok, total = %u, resolution = %u x %u\n", ++g_total, info.width, info.height);
+                printf("pull static image ok, total = %u, resolution = %u x %u\n", ++g_total, info.width, info.height);
+                printf("encode.\n");
                 encode_jpeg((unsigned char *)g_pStaticImageData);
+                /*
+                hr = Toupcam_PullStillImage(g_hcam, g_pStaticImageData, 24, NULL, NULL);
+                if (SUCCEEDED(hr))
+                {
+                    printf("encode.\n");
+                    encode_jpeg((unsigned char *)g_pStaticImageData);
+                }
+                else
+                {
+                    printf("miss static image, total = %u, resolution = %u x %u\n", ++g_total, info.width, info.height);
+                }
+                */
             }
             break;
         case TOUPCAM_EVENT_EXPOSURE:     /* exposure time changed */
@@ -109,7 +123,7 @@ void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx)
         case TOUPCAM_EVENT_BLACK:        /* black balance changed */
         case TOUPCAM_EVENT_FFC:          /* flat field correction status changed */
         case TOUPCAM_EVENT_DFC:          /* dark field correction status changed */
-            printf("toupcam event: %d\n", nEvent);
+            //printf("toupcam event: %d\n", nEvent);
             break;
         case TOUPCAM_EVENT_ERROR:        /* generic error */
             *puiCallbackCtx = TOUPCAM_EVENT_ERROR;
@@ -162,7 +176,7 @@ void *pthread_server(void *pdata)
 			//printf("select fail.\n");
 			continue;
 		}
-		for(i = 0; i < iServerFd+1; i++)
+		for(i = 0; i < iMaxfd+1; i++)
 		{
 			if(FD_ISSET(i, &tmprdfs))
 			{
@@ -189,13 +203,22 @@ void *pthread_server(void *pdata)
 					{
 						char *pcBuffData = strstr(g_cBuffData, "proto");
 						usSize = *(pcBuffData+5) | *(pcBuffData+6);
+                        printf("size:%d\n", usSize);
 						g_ReqResFlag = *(pcBuffData+7);
+                        printf("flag:%d\n", *(pcBuffData+7));
+                        printf("%d %d %d\n",*(pcBuffData+8), *(pcBuffData+9), *(pcBuffData+10));
 						common_hander(i, pcBuffData+8, usSize-1);
 					}
+                    else
+                    {
+                        printf("sock unconnect...\n");
+                        FD_CLR(i, &rdfs);
+                        close(i);
+                    }
 					/* close */
 				}
-				FD_CLR(i, &tmprdfs);
 			}
+            FD_CLR(i, &tmprdfs);
 		}
 	}
 
