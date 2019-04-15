@@ -4,6 +4,9 @@
 
 #define ARRAY_SIZE(a) sizeof(a)/sizeof(a[0])
 
+#define END_BUFF_SIZE         (0)
+#define INVAILD_BUFF_SIZE     (1)
+
 enum TOUPCAM_CMD_E{
     /* toupcam cfg */
     CMD_FIRST,
@@ -125,6 +128,7 @@ typedef struct Com_Entry
 }COM_ENTRY_S;
 
 extern COM_ENTRY_S g_Comm_Entry[];
+extern unsigned int g_Comm_Entry_Size;
 
 extern TOUPCAM_S* g_pstTouPcam;
 extern HToupCam g_hcam;

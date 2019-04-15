@@ -53,6 +53,7 @@ COM_ENTRY_S g_Comm_Entry[] = {
     {COMCMD_WIFICFG, common_wifi_cmd},
     {COMCMD_TOUPCAMCFG, common_toupcam_cmd},
 };
+unsigned int g_Comm_Entry_Size = ARRAY_SIZE(g_Comm_Entry);
 
 #define MANUEXPOTIME 1
 #define AUTOEXPOTIME 1

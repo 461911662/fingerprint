@@ -7,6 +7,10 @@ typedef struct Toupcam_cfg_RadioButton
     char buttonValue;
 }TPUPCAM_CFG_RB_S;
 
+extern unsigned char *g_pucJpgDest;//[1024*1022];
+
+/* 线程锁 */
+extern pthread_mutex_t g_PthreadMutexJpgDest;
 
 extern int common_toupcam_cmd(int fd, void *pdata, unsigned short usSize);
 

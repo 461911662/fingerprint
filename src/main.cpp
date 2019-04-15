@@ -48,14 +48,15 @@ int nWidth = 0, nHeight = 0;
 int WIDTH = 0, HEIGHT = 0;
 
 /* support for jpeg transmit */
-unsigned char *gpucJpgDest = NULL;//[1024*1022];
+unsigned char *g_pucJpgDest = NULL;//[1024*1022];
 int giJpgSize=1024*1022;
 
 /* 线程 */
 #define MaxThreadNum      (4)
-pthread_t gPthreadId[MaxThreadNum] = {0};
-unsigned int gPthreadMaxNum = ARRAY_SIZE(gPthreadId);
-pthread_mutex_t gPthreadMutex_h264;
+pthread_t g_PthreadId[MaxThreadNum] = {0};
+unsigned int g_PthreadMaxNum = ARRAY_SIZE(g_PthreadId);
+pthread_mutex_t g_PthreadMutex_h264;
+pthread_mutex_t g_PthreadMutexJpgDest;
 
 extern void Destory_sock(void);
 
@@ -281,6 +282,13 @@ int init_sock(void)
 	return iRet;
 }
 
+void pthread_mutex_inits(void)
+{
+    /* 初始化jpeg线程数据保护锁 */
+    pthread_mutex_init(&g_PthreadMutexJpgDest, NULL);
+    return;
+}
+
 int main(int, char**)
 {
 	int inWidth = 0, inHeight = 0;
@@ -294,11 +302,14 @@ int main(int, char**)
         goto exit0_;
     }
 
+    /* 初始化线程锁 */
+    pthread_mutex_inits();
+    
     /* tcp server thread */
-    iRet = pthread_create(&gPthreadId[0], NULL, pthread_server, (void *)&iPthredArg);
+    iRet = pthread_create(&g_PthreadId[0], NULL, pthread_server, (void *)&iPthredArg);
 
 	/* toupcam health's monitor thread */
-    iRet = pthread_create(&gPthreadId[1], NULL, pthread_health_monitor, (void *)&iPthredArg);
+    iRet = pthread_create(&g_PthreadId[1], NULL, pthread_health_monitor, (void *)&iPthredArg);
 
     iRet = init_Toupcam();
     if(ERROR_FAILED == iRet)

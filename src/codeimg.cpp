@@ -15,6 +15,7 @@ extern "C"
 };
 
 #define VENC_FPS 30
+#define JPEG_COMPRESS_QUILITY    (100)
 
 void encode_yuv(unsigned char *g_pImageData);
 int encode_jpeg(unsigned char *pucImageData);
@@ -117,6 +118,8 @@ int encode_jpeg(unsigned char *pucImageData)
         return ERROR_FAILED;
     }
 
+    pthread_mutex_lock(&g_PthreadMutexJpgDest);
+
     int iRet = ERROR_SUCCESS;
     struct jpeg_compress_struct stcinfo;
     struct jpeg_error_mgr stjerr;
@@ -132,7 +135,7 @@ int encode_jpeg(unsigned char *pucImageData)
 
     /* step 2 */
     giJpgSize = 0;
-    jpeg_mem_dest(&stcinfo, &gpucJpgDest, (unsigned long *)&giJpgSize);
+    jpeg_mem_dest(&stcinfo, &g_pucJpgDest, (unsigned long *)&giJpgSize);
 
     /* step 3 */
     stcinfo.image_width = g_pstTouPcam->inMaxWidth;
@@ -142,7 +145,7 @@ int encode_jpeg(unsigned char *pucImageData)
 
     /* step 4 */
     jpeg_set_defaults(&stcinfo);
-    jpeg_set_quality(&stcinfo, 100, TRUE );
+    jpeg_set_quality(&stcinfo, JPEG_COMPRESS_QUILITY, TRUE );
     jpeg_start_compress(&stcinfo, TRUE);
     row_stride = g_pstTouPcam->inMaxWidth;
 
@@ -155,11 +158,13 @@ int encode_jpeg(unsigned char *pucImageData)
     /* step 5 */
     jpeg_finish_compress(&stcinfo);
     jpeg_destroy_compress(&stcinfo);
+
     if(g_pStaticImageDataFlag)
     {
         printf("too many snapshot picture flag.\n");
     }
     g_pStaticImageDataFlag = 1;
+    pthread_mutex_unlock(&g_PthreadMutexJpgDest);
     
     return iRet;
 }

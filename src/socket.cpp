@@ -22,8 +22,8 @@ void common_hander(int fd, char *pBuff, unsigned short ucSize)
 
     int i, j;
     int iRet = 0;
-    /*
-    for(i = 0; i < ARRAY_SIZE(g_Comm_Entry); i++)
+    
+    for(i = 0; i < g_Comm_Entry_Size; i++)
     {
         if(*pBuff == g_Comm_Entry[i].cmd_id)
         {
@@ -35,7 +35,7 @@ void common_hander(int fd, char *pBuff, unsigned short ucSize)
             }
             printf("cc:%d\n", iRet);
         }
-    }*/
+    }
 }
 
 //创建sock套接字

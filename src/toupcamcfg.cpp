@@ -1,5 +1,7 @@
 #include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
+#include <pthread.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include "../include/toupcamcfg.h"
@@ -18,6 +20,7 @@ int fillresponheader(TOUPCAM_COMMON_RESPON_S *respon)
     sprintf(respon->com.proto, "%s", "proto");
     respon->com.proto[4] = 'o';
     respon->com.type = TCP_RESPONSE;
+    respon->com.size = INVAILD_BUFF_SIZE;
     respon->cc = ERROR_SUCCESS;
     respon->pdata = NULL;
 }
@@ -34,7 +37,7 @@ static int snapshot(int fd)
 
     fillresponheader(&stToupcamRespon);
     stToupcamRespon.com.subcmd = CMD_SNAPPICTURE;
-    stToupcamRespon.com.size = 1;
+    stToupcamRespon.com.size = INVAILD_BUFF_SIZE;
 
     if(!g_pstTouPcam->m_hcam)
     {
@@ -43,29 +46,42 @@ static int snapshot(int fd)
     }
     HRESULT hr = Toupcam_Snap(g_pstTouPcam->m_hcam, 0); /* 抓拍当前2048x2044 */
     if (FAILED(hr))
-        goto _exit1;    
+    {
+        goto _exit1;
+    }
     else
+    {
         while(!g_pStaticImageDataFlag);
+
+        pthread_mutex_lock(&g_PthreadMutexJpgDest);
         if(g_pstTouPcam->inMaxWidth > 0 && g_pstTouPcam->inMaxHeight > 0)
         {
             iTotalSize = TDIBWIDTHBYTES(g_pstTouPcam->inMaxWidth * 24) * g_pstTouPcam->inMaxHeight;
             char *pBuffer = (char *)malloc(iTotalSize);
-            stToupcamRespon.pdata = pBuffer; 
-            if(NULL == stToupcamRespon.pdata)
+            if(NULL == pBuffer)
             {
                 perror("stToupcamRespon.pdata");
                 goto _exit1;
             }
+
+            memset(pBuffer, 0, iTotalSize);
+            memcpy(pBuffer, g_pucJpgDest, iTotalSize);
+            stToupcamRespon.pdata = pBuffer; 
+
             if(iTotalSize > TCP_BUFFERSIZE)
+            {
                 stToupcamRespon.com.size = TCP_BUFFERSIZE;
+            }
             else
             {
                 stToupcamRespon.com.size = iTotalSize;
             }
             while(1)
             {
-                if(iTotalSize<=0)
+                if(iTotalSize <= 0)
+                {
                     break;
+                }
 
                 stToupcamRespon.com.size = iTotalSize>TCP_BUFFERSIZE?TCP_BUFFERSIZE:iTotalSize;
                 
@@ -80,14 +96,21 @@ static int snapshot(int fd)
             pBuffer = NULL;
             stToupcamRespon.pdata = NULL;
         }
-        g_pStaticImageDataFlag = 0;
 
-        return ERROR_SUCCESS;
+        /* 发送结束标志，size=0 */
+        stToupcamRespon.com.size = END_BUFF_SIZE;
+        send(fd, &stToupcamRespon, sizeof(TOUPCAM_COMMON_RESPON_S)- sizeof(char*), 0);
+
+        g_pStaticImageDataFlag = 0;        
+        pthread_mutex_unlock(&g_PthreadMutexJpgDest);
+    }
+
+    return ERROR_SUCCESS;
 
 _exit1:
     stToupcamRespon.cc = ERROR_FAILED;
     send(fd, &stToupcamRespon, sizeof(TOUPCAM_COMMON_RESPON_S), 0);
-    
+
     return ERROR_FAILED;
 }
 

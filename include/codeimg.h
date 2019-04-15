@@ -22,10 +22,14 @@ typedef struct __X264_ENCODER__
 
 extern X264Encoder x264Encoder;
 extern int nWidth, nHeight, giJpgSize;
-extern unsigned char *gpucJpgDest;//[1024*1022];
+extern unsigned char *g_pucJpgDest;//[1024*1022];
 extern struct rtp_pack *rtp;
 extern struct rtp_pack_head head;
 extern int sendnum;
+
+/* 线程锁 */
+extern pthread_mutex_t g_PthreadMutexJpgDest;
+
 
 extern void encode_yuv(unsigned char *g_pImageData);
 extern int encode_jpeg(unsigned char *pucImageData);
