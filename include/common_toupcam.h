@@ -6,6 +6,7 @@
 
 #define END_BUFF_SIZE         (0)
 #define INVAILD_BUFF_SIZE     (1)
+#define TOUPCAM_COMMON_RESPON_HEADER_SIZE (12)
 
 enum TOUPCAM_CMD_E{
     /* toupcam cfg */
@@ -51,7 +52,6 @@ typedef struct Toupcam_common_respon
     char cc;
     char *pdata;
 }__attribute__((packed))TOUPCAM_COMMON_RESPON_S;
-
 
 
 typedef struct Toupcam_ExpoTime

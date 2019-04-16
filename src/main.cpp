@@ -202,11 +202,24 @@ void *pthread_server(void *pdata)
 					if(iRet > 0)
 					{
 						char *pcBuffData = strstr(g_cBuffData, "proto");
+						if(NULL == pcBuffData)
+						{
+							printf("no proto.\n");
+							FD_CLR(i, &tmprdfs);
+							continue;
+						}
+						/*
+						*debug
+						int k;
+						for(k=0; k<11; k++)
+						{
+							printf("%2x ", g_cBuffData[k]);
+						}
+						printf("\n");
+						*/
 						usSize = *(pcBuffData+5) | *(pcBuffData+6);
-                        printf("size:%d\n", usSize);
+                        /* printf("size:%d\n", usSize); */
 						g_ReqResFlag = *(pcBuffData+7);
-                        printf("flag:%d\n", *(pcBuffData+7));
-                        printf("%d %d %d\n",*(pcBuffData+8), *(pcBuffData+9), *(pcBuffData+10));
 						common_hander(i, pcBuffData+8, usSize-1);
 					}
                     else
@@ -334,6 +347,9 @@ int main(int, char**)
 	/* toupcam health's monitor thread */
     iRet = pthread_create(&g_PthreadId[1], NULL, pthread_health_monitor, (void *)&iPthredArg);
 
+	getc(stdin);
+	while(1);
+	
     iRet = init_Toupcam();
     if(ERROR_FAILED == iRet)
     {
