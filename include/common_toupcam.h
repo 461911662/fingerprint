@@ -59,6 +59,23 @@ typedef struct Toupcam_ExpoTime
 
 }TOUPCAM_EXPOTIME_S;
 
+typedef struct Texpo
+{
+    /* Toupcam相机曝光参数 */
+    char changed;                   /* 描述曝光时间发生变化的标志 */
+    int bAutoExposure;              /* 设置自动曝光，True        or False */
+    unsigned short AutoTarget;      /* 自动曝光目标值 */
+    unsigned AutoMaxTime;           /* 设置自动曝光的最大时间 */
+    unsigned short AutoMaxAGain;    /* 设置自动曝光的最大增益            */
+    unsigned Time;                  /* 设置曝光时间，单位为微秒 */
+    unsigned nMin;                  /* 曝光的最小时间 */
+    unsigned nMax;                  /* 曝光的最大时间 */
+    unsigned nDef;                  /* 曝光的默认时间 */
+    unsigned short AGain;           /* 模拟增益，百分比，如200表示增益200% */
+    unsigned short AnMin;           /* 模拟增益的最小时间 */
+    unsigned short nMax;            /* 模拟增益的最大时间 */
+    unsigned short nDef;            /* 模拟增益的默认时间 */
+}TEXPO_S;
 
 typedef struct Toupcam
 {
@@ -71,6 +88,7 @@ typedef struct Toupcam
 	void*	m_pImageData; /* 当前Toupcam的数据Buffer */
     void*   m_PStaticImageData;  /* 快速抓拍使用的数据Buffer */
 	BITMAPINFOHEADER m_header;
+    TEXPO_S stTexpo;
 
     /* Toupcam wifi cmd */
     struct Toupcam_wifi{
@@ -97,6 +115,8 @@ typedef struct Toupcam
         void *private_data;
 #endif
     };
+
+    
   
 
     /* opreation */
