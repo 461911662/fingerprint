@@ -21,7 +21,8 @@ typedef struct __X264_ENCODER__
 
 
 extern X264Encoder x264Encoder;
-extern int nWidth, nHeight, giJpgSize;
+extern int nWidth, nHeight;
+extern unsigned int giJpgSize;
 extern unsigned char *g_pucJpgDest;//[1024*1022];
 extern struct rtp_pack *rtp;
 extern struct rtp_pack_head head;

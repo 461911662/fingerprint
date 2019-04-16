@@ -6,7 +6,7 @@
 
 #define END_BUFF_SIZE         (0)
 #define INVAILD_BUFF_SIZE     (1)
-#define TOUPCAM_COMMON_RESPON_HEADER_SIZE (12)
+#define TOUPCAM_COMMON_RESPON_HEADER_SIZE (18)
 
 enum TOUPCAM_CMD_E{
     /* toupcam cfg */
@@ -40,7 +40,7 @@ enum COMMON_CMD_E{
 typedef struct Toupcam_common_header
 {
     char proto[5];
-    unsigned short size;
+    unsigned int size[2];
     char type;
     char cmd;
     unsigned short subcmd;

@@ -12,7 +12,7 @@
 char g_cBuffData[TCP_BUFFER_SIZE] = {0};
 char g_ReqResFlag;
 
-void common_hander(int fd, char *pBuff, unsigned short ucSize)
+void common_hander(int fd, char *pBuff, unsigned int uiSize)
 {
     if(fd < 0 || NULL == pBuff)
     {
@@ -27,14 +27,16 @@ void common_hander(int fd, char *pBuff, unsigned short ucSize)
     {
         if(*pBuff == g_Comm_Entry[i].cmd_id)
         {
-            iRet = g_Comm_Entry[i].handle(fd, pBuff+1, ucSize-1);
+            iRet = g_Comm_Entry[i].handle(fd, pBuff+1, uiSize-1);
             printf("request(%d): cmd:%x,subcmd:%x %x,", fd, *pcBuf, *(pcBuf+1), *(pcBuf+2));
+            printf("uisize:%d\n", uiSize);
             
-            for(j=3; j<ucSize; j++)
+            for(j=3; j<uiSize; j++)
             {
             	printf(" %x", pcBuf[j]);
             }
             printf("\n     cc: %d\n", iRet);
+            
         }
     }
 }

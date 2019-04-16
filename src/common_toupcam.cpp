@@ -91,9 +91,11 @@ unsigned int PreInitialDevice(void *pvoid)
         nHeight = iHeight;        
         pTmpToupcam->inWidth = iWidth;
         pTmpToupcam->inHeight = iHeight;
-        //pTmpToupcam->inMaxWidth = iMaxWidth;
-        //pTmpToupcam->inMaxHeight = iMaxHeight;
-		//pTmpToupcam->iSnapSize = TDIBWIDTHBYTES(iMaxWidth * 24) * iMaxHeight;
+        /*
+        pTmpToupcam->inMaxWidth = iMaxWidth;
+        pTmpToupcam->inMaxHeight = iMaxHeight;
+		pTmpToupcam->iSnapSize = TDIBWIDTHBYTES(iMaxWidth * 24) * iMaxHeight;
+		*/
         pTmpToupcam->inMaxWidth = iWidth;
         pTmpToupcam->inMaxHeight = iHeight;
 		pTmpToupcam->iSnapSize = TDIBWIDTHBYTES(iWidth * 24) * iHeight;

@@ -21,7 +21,8 @@ int fillresponheader(TOUPCAM_COMMON_RESPON_S *respon)
     sprintf(respon->com.proto, "%s", "proto");
     respon->com.proto[4] = 'o';
     respon->com.type = TCP_RESPONSE;
-    respon->com.size = INVAILD_BUFF_SIZE;
+    respon->com.size[0] = INVAILD_BUFF_SIZE;
+    respon->com.size[1] = 0;
     respon->cc = ERROR_SUCCESS;
     respon->pdata = NULL;
 }
@@ -61,10 +62,11 @@ static int snapshot(int fd)
 
     fillresponheader(&stToupcamRespon);
     stToupcamRespon.com.subcmd = CMD_SNAPPICTURE;
-    stToupcamRespon.com.size = INVAILD_BUFF_SIZE;
+    stToupcamRespon.com.size[0] = INVAILD_BUFF_SIZE;
 
 	/*
 	*debug: foreach send memcpy
+
 	//iTotalSize = 425984 + (425984/TCP_BUFFERSIZE + (425984%TCP_BUFFERSIZE?1:0))*12;
 	iTotalSize = 425984;
 	printf("iTotalSize:%d\n", iTotalSize);
@@ -115,7 +117,7 @@ static int snapshot(int fd)
 
 	free(pBuffer);
 	return ERROR_SUCCESS;
-	*/
+	*/	
 
     if(!g_pstTouPcam->m_hcam)
     {
@@ -131,10 +133,12 @@ static int snapshot(int fd)
     else
     {
         /* printf("picture arrived!\n"); */
+        while(!g_pStaticImageDataFlag);
         pthread_mutex_lock(&g_PthreadMutexJpgDest);
         if(g_pstTouPcam->inMaxWidth > 0 && g_pstTouPcam->inMaxHeight > 0)
         {
-            iTotalSize = TDIBWIDTHBYTES(g_pstTouPcam->inMaxWidth * 24) * g_pstTouPcam->inMaxHeight;
+            //iTotalSize = TDIBWIDTHBYTES(g_pstTouPcam->inMaxWidth * 24) * g_pstTouPcam->inMaxHeight;
+            iTotalSize = giJpgSize;
             char *pBuffer = (char *)malloc(TCP_BUFFERSIZE+TOUPCAM_COMMON_RESPON_HEADER_SIZE);
             if(NULL == pBuffer)
             {
@@ -143,9 +147,17 @@ static int snapshot(int fd)
             }
 
 			char * pucJpgDest = (char *)g_pucJpgDest;
+            /*
+            FILE *fp = fopen("myjpeg.jpeg", "ab+");
+            if(NULL == fp)
+                goto _exit1;
+            */
 
             memset(pBuffer, 0, TCP_BUFFERSIZE+TOUPCAM_COMMON_RESPON_HEADER_SIZE);
-
+            stToupcamRespon.com.size[0] = iTotalSize;
+            m_memcopy(pBuffer, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE);
+            send(fd, pBuffer, TOUPCAM_COMMON_RESPON_HEADER_SIZE, 0);
+            
             while(1)
             {
                 if(iTotalSize <= 0)
@@ -154,25 +166,33 @@ static int snapshot(int fd)
                 }
 
 				isize = iTotalSize>TCP_BUFFERSIZE?TCP_BUFFERSIZE:iTotalSize;
-				stToupcamRespon.com.size = isize;
+				stToupcamRespon.com.size[0] = isize;
 
+                /*
 				memset(pBuffer, 0, isize+TOUPCAM_COMMON_RESPON_HEADER_SIZE);
 				m_memcopy(pBuffer, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE);
 				m_memcopy(pBuffer+TOUPCAM_COMMON_RESPON_HEADER_SIZE, pucJpgDest, isize);
+                */
+                
+				memset(pBuffer, 0, isize);
+				m_memcopy(pBuffer, pucJpgDest, isize);
 
-				send(fd, pBuffer, isize+TOUPCAM_COMMON_RESPON_HEADER_SIZE, 0);
-				
+				send(fd, pBuffer, isize, 0);
+                /* fwrite(pBuffer, isize, 1, fp); */
+    
 				pucJpgDest += isize;
 				iTotalSize -= isize;
             }
+            /* fclose(fp); */
             free(pBuffer);
             free(g_pucJpgDest);
 			pBuffer = NULL;
+            giJpgSize = 0;
             g_pucJpgDest = NULL;
         }
 
         /* 发送结束标志，size=0 */
-        stToupcamRespon.com.size = END_BUFF_SIZE;
+        stToupcamRespon.com.size[0] = END_BUFF_SIZE;
         send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE, 0);
 
         g_pStaticImageDataFlag = 0;        

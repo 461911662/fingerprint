@@ -49,7 +49,7 @@ int WIDTH = 0, HEIGHT = 0;
 
 /* support for jpeg transmit */
 unsigned char *g_pucJpgDest = NULL;//[1024*1022];
-int giJpgSize=1024*1022;
+unsigned int giJpgSize=1024*1022;
 
 /* 线程 */
 #define MaxThreadNum      (4)
@@ -93,16 +93,14 @@ void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx)
         case TOUPCAM_EVENT_STILLIMAGE:
             printf("toupcam event TOUPCAM_EVENT_STILLIMAGE(%d).\n", nEvent);
             memset(g_pStaticImageData, 0, sizeof(g_pstTouPcam->m_header.biSizeImage));
-            hr = Toupcam_PullStillImageV2(g_hcam, g_pStaticImageData, 24, &info);
+            hr = Toupcam_PullStillImageV2(g_hcam, NULL, 24, &info);
             if (FAILED(hr))
                 printf("failed to pull image, hr = %08x\n", hr);
             else
             {
                 /* After we get the image data, we can do anything for the data we want to do */
-                printf("pull static image ok, total = %u, resolution = %u x %u\n", ++g_total, info.width, info.height);
-                printf("encode.\n");
-                encode_jpeg((unsigned char *)g_pStaticImageData);
-                /*
+                /* printf("pull static image ok, total = %u, resolution = %u x %u\n", ++g_total, info.width, info.height); */
+                
                 hr = Toupcam_PullStillImage(g_hcam, g_pStaticImageData, 24, NULL, NULL);
                 if (SUCCEEDED(hr))
                 {
@@ -113,7 +111,6 @@ void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx)
                 {
                     printf("miss static image, total = %u, resolution = %u x %u\n", ++g_total, info.width, info.height);
                 }
-                */
             }
             break;
         case TOUPCAM_EVENT_EXPOSURE:     /* exposure time changed */
@@ -146,7 +143,7 @@ void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx)
 void *pthread_server(void *pdata)
 {
     int iClientFd, iServerFd, iRet, i;
-    unsigned short usSize = 0;
+    unsigned int uiSize = 0;
     struct sockaddr stClientaddr;
     socklen_t addrlen = sizeof(struct sockaddr_in);
     if(sock1->local < 0)
@@ -164,6 +161,7 @@ void *pthread_server(void *pdata)
 	int iMaxfd = iServerFd;
 	while(1)
 	{
+	    sleep(1);
 		tmprdfs = rdfs;
 		iRet = select(iMaxfd+1, &tmprdfs, NULL, NULL, &tv);
 		if(iRet == 0)
@@ -217,10 +215,12 @@ void *pthread_server(void *pdata)
 						}
 						printf("\n");
 						*/
-						usSize = *(pcBuffData+5) | *(pcBuffData+6);
-                        /* printf("size:%d\n", usSize); */
-						g_ReqResFlag = *(pcBuffData+7);
-						common_hander(i, pcBuffData+8, usSize-1);
+						uiSize = (*(pcBuffData+5)<<0) + (*(pcBuffData+6)<<8) + (*(pcBuffData+7)<<16) 
+						        + (*(pcBuffData+8)<<24);
+                        /* printf("size:%d\n", uiSize); */
+
+						g_ReqResFlag = *(pcBuffData+9+4);
+						common_hander(i, pcBuffData+10+4, uiSize-1);
 					}
                     else
                     {
@@ -346,10 +346,7 @@ int main(int, char**)
 
 	/* toupcam health's monitor thread */
     iRet = pthread_create(&g_PthreadId[1], NULL, pthread_health_monitor, (void *)&iPthredArg);
-
-	getc(stdin);
-	while(1);
-	
+    
     iRet = init_Toupcam();
     if(ERROR_FAILED == iRet)
     {
