@@ -10,23 +10,6 @@
 #include "../include/toupcam.h"
 #include "../include/socket.h"
 
-int fillresponheader(TOUPCAM_COMMON_RESPON_S *respon)
-{
-    if(NULL == respon)
-    {
-        printf("%s: input is invaild.\n", __func__);
-        return ERROR_FAILED;
-    }
-    respon->com.cmd = COMCMD_TOUPCAMCFG;
-    sprintf(respon->com.proto, "%s", "proto");
-    respon->com.proto[4] = 'o';
-    respon->com.type = TCP_RESPONSE;
-    respon->com.size[0] = INVAILD_BUFF_SIZE;
-    respon->com.size[1] = 0;
-    respon->cc = ERROR_SUCCESS;
-    respon->pdata = NULL;
-}
-
 int m_memcopy(void* des, void* src, unsigned int size)
 {
     if(NULL == des || NULL == src)
@@ -47,7 +30,66 @@ int m_memcopy(void* des, void* src, unsigned int size)
         return -1;
 }
 
-unsigned char g_pcData[425984+1] = {0};
+/* unsigned char g_pcData[425984+1] = {0}; */
+
+static int blackrorator(int fd)
+{
+    if(fd < 0)
+    {
+        printf("socket fd is invaild.\n");
+        return ERROR_FAILED;
+    }
+    TOUPCAM_COMMON_RESPON_S stToupcamRespon;
+    int iTotalSize = 0;
+	int isize = 0;
+    int iRet = 0;
+
+    fillresponheader(&stToupcamRespon);
+    stToupcamRespon.com.subcmd = CMD_BLACKRORATOR;
+    stToupcamRespon.com.size[0] = INVAILD_BUFF_SIZE;
+
+    if(!g_pstTouPcam->m_hcam)
+    {
+        printf("toupcam->m_hcam is invaild.\n");
+        return ERROR_FAILED;
+    }
+
+    /* lock */
+    pthread_mutex_lock(&g_PthreadMutexMonitor);
+    int *pibNegative = &g_pstTouPcam->bNegative;
+    HRESULT hr = Toupcam_get_Negative(g_pstTouPcam->m_hcam, pibNegative);
+    if (FAILED(hr))
+    {
+        printf("toupcam get Negative failed!\n");
+        goto _exit0;
+    }
+    Toupcam_put_Negative(g_pstTouPcam->m_hcam, (*pibNegative)^1);
+    if (FAILED(hr))
+    {
+        printf("toupcam put (%d) Negative failed!\n", (*pibNegative)^1);
+        goto _exit0;
+    }
+    *pibNegative = (*pibNegative)^1;
+    /* unlock */
+    pthread_mutex_unlock(&g_PthreadMutexMonitor);
+
+    stToupcamRespon.com.size[0] = END_BUFF_SIZE;
+    iRet = send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE, 0);
+    if(iRet <= 0)
+    {
+        printf("socket (%d) send failed!\n", fd);
+        goto _exit0;
+    }
+    
+    return ERROR_SUCCESS;
+
+_exit0:
+    stToupcamRespon.cc = ERROR_FAILED;
+    send(fd, &stToupcamRespon, sizeof(TOUPCAM_COMMON_RESPON_S), 0);
+
+    return ERROR_FAILED;
+
+}
 
 static int snapshot(int fd)
 {
@@ -128,7 +170,7 @@ static int snapshot(int fd)
     if (FAILED(hr))
     {
         printf("picture arrived failly(%lld)!\n", hr);
-        goto _exit1;
+        goto _exit0;
     }
     else
     {
@@ -137,13 +179,13 @@ static int snapshot(int fd)
         pthread_mutex_lock(&g_PthreadMutexJpgDest);
         if(g_pstTouPcam->inMaxWidth > 0 && g_pstTouPcam->inMaxHeight > 0)
         {
-            //iTotalSize = TDIBWIDTHBYTES(g_pstTouPcam->inMaxWidth * 24) * g_pstTouPcam->inMaxHeight;
+            /* iTotalSize = TDIBWIDTHBYTES(g_pstTouPcam->inMaxWidth * 24) * g_pstTouPcam->inMaxHeight; */
             iTotalSize = giJpgSize;
             char *pBuffer = (char *)malloc(TCP_BUFFERSIZE+TOUPCAM_COMMON_RESPON_HEADER_SIZE);
             if(NULL == pBuffer)
             {
                 perror("stToupcamRespon.pdata");
-                goto _exit1;
+                goto _exit0;
             }
 
 			char * pucJpgDest = (char *)g_pucJpgDest;
@@ -191,9 +233,10 @@ static int snapshot(int fd)
             g_pucJpgDest = NULL;
         }
 
+        /* usleep(100000); */
         /* 发送结束标志，size=0 */
-        stToupcamRespon.com.size[0] = END_BUFF_SIZE;
-        send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE, 0);
+        /* stToupcamRespon.com.size[0] = END_BUFF_SIZE; */
+        /* send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE, 0); */
 
         g_pStaticImageDataFlag = 0;        
         pthread_mutex_unlock(&g_PthreadMutexJpgDest);
@@ -201,7 +244,7 @@ static int snapshot(int fd)
 
     return ERROR_SUCCESS;
 
-_exit1:
+_exit0:
     stToupcamRespon.cc = ERROR_FAILED;
     send(fd, &stToupcamRespon, sizeof(TOUPCAM_COMMON_RESPON_S), 0);
 
@@ -215,9 +258,19 @@ int common_toupcam_cmd(int fd, void *pdata, unsigned short usSize)
         printf("%s: input is invaild.\n", __func__);
         return ERROR_FAILED;
     }
-    unsigned char *pucData = (unsigned char*)pdata;
+    TOUPCAM_COMMON_REQUES_S *pstToupcamReq = (TOUPCAM_COMMON_REQUES_S *)pdata;
 
     unsigned int usCmd = 0;
+    if(!iEndianness)
+    {
+        usCmd = BIGLITTLESWAP32(pstToupcamReq->com.subcmd);
+    }
+    else
+    {
+        usCmd = pstToupcamReq->com.subcmd;
+    }
+
+    /*
     if(0 != *pucData)
     {
         usCmd = *pucData | *(pucData+1);
@@ -226,12 +279,13 @@ int common_toupcam_cmd(int fd, void *pdata, unsigned short usSize)
     {
         usCmd = (unsigned int)*(pucData+1);
     }
+    */
     switch(usCmd)
     {
         case CMD_SNAPPICTURE:
             return snapshot(fd);
         case CMD_BLACKRORATOR:
-            break;
+            return blackrorator(fd);
         case CMD_ZONEEXPO:
             break;
         case CMD_BRIGHTNESSTYPE:

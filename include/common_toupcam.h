@@ -7,6 +7,8 @@
 #define END_BUFF_SIZE         (0)
 #define INVAILD_BUFF_SIZE     (1)
 #define TOUPCAM_COMMON_RESPON_HEADER_SIZE (18)
+#define IPV4
+#define BIGLITTLESWAP32(A) ((A&0xff)<<24 | (A&0xff00)<<8 | (A&0xff0000)>>8 | (A&0xff000000)>>24)
 
 enum TOUPCAM_CMD_E{
     /* toupcam cfg */
@@ -23,11 +25,14 @@ enum TOUPCAM_CMD_E{
     CMD_HISTOGRAMTYPE,      /* 直方图方式 */
     CMD_HISTOGRAM,          /* 直方图调节 */
     /* wifi cfg */
+    CMD_SETUDPADDR,         /* UDP 设置客户端地址 */
 };
 
 enum TOUPCAM_CC_CODE_E{
     ERROR_SUCCESS,
     ERROR_FAILED,
+    ERROR_WIFI_ADDR_EXIST = 2,
+    ERROR_WIFI_ADDR_HOLD = 3,
     NOTSUPPORT,
 };
 
@@ -53,6 +58,15 @@ typedef struct Toupcam_common_respon
     char *pdata;
 }__attribute__((packed))TOUPCAM_COMMON_RESPON_S;
 
+typedef struct Toupcam_common_reques
+{
+    TOUPCAM_COMMON_HEADER_S com;
+    union Data {
+        unsigned int ipv4;
+        unsigned long long ipv6;
+        char resever[128];
+    }data;
+}__attribute__((packed))TOUPCAM_COMMON_REQUES_S;
 
 typedef struct Toupcam_ExpoTime
 {
@@ -73,9 +87,11 @@ typedef struct Texpo
     unsigned nDef;                  /* 曝光的默认时间 */
     unsigned short AGain;           /* 模拟增益，百分比，如200表示增益200% */
     unsigned short AnMin;           /* 模拟增益的最小时间 */
-    unsigned short nMax;            /* 模拟增益的最大时间 */
-    unsigned short nDef;            /* 模拟增益的默认时间 */
+    unsigned short AnMax;            /* 模拟增益的最大时间 */
+    unsigned short AnDef;            /* 模拟增益的默认时间 */
 }TEXPO_S;
+
+
 
 typedef struct Toupcam
 {
@@ -88,6 +104,7 @@ typedef struct Toupcam
 	void*	m_pImageData; /* 当前Toupcam的数据Buffer */
     void*   m_PStaticImageData;  /* 快速抓拍使用的数据Buffer */
 	BITMAPINFOHEADER m_header;
+    int bNegative;               /* 照片是否反转 */
     TEXPO_S stTexpo;
 
     /* Toupcam wifi cmd */
@@ -156,6 +173,7 @@ extern int nWidth, nHeight;
 extern void* g_pImageData;
 extern void* g_pStaticImageData;
 extern int g_pStaticImageDataFlag;
+extern unsigned int iEndianness;
 
 extern struct sockets *sock; /* udp potr:5004 */
 extern struct sockets *sock1; /* tcp potr:5005 */

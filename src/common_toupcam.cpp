@@ -215,6 +215,7 @@ static unsigned int _init(void)
     }
     memset(g_pstTouPcam, 0, sizeof(TOUPCAM_S));
 
+    g_pstTouPcam->bNegative = 0;   /* 设置相机图像不反转 */
     g_pstTouPcam->m_header.biSize = sizeof(g_pstTouPcam->m_header);
     g_pstTouPcam->m_header.biPlanes = 1;
     g_pstTouPcam->m_header.biBitCount = 24;
@@ -409,6 +410,24 @@ unsigned int init_Toupcam(void)
     return ERROR_SUCCESS;
 }
 
-
+/*
+* Toupcam 应答通用头
+*/
+int fillresponheader(TOUPCAM_COMMON_RESPON_S *respon)
+{
+    if(NULL == respon)
+    {
+        printf("%s: input is invaild.\n", __func__);
+        return ERROR_FAILED;
+    }
+    respon->com.cmd = COMCMD_TOUPCAMCFG;
+    sprintf(respon->com.proto, "%s", "proto");
+    respon->com.proto[4] = 'o';
+    respon->com.type = TCP_RESPONSE;
+    respon->com.size[0] = INVAILD_BUFF_SIZE;
+    respon->com.size[1] = 0;
+    respon->cc = ERROR_SUCCESS;
+    respon->pdata = NULL;
+}
 
 

@@ -51,14 +51,26 @@ int WIDTH = 0, HEIGHT = 0;
 unsigned char *g_pucJpgDest = NULL;//[1024*1022];
 unsigned int giJpgSize=1024*1022;
 
+/* 大小端标志 */
+unsigned int iEndianness = 0;
+
 /* 线程 */
 #define MaxThreadNum      (4)
 pthread_t g_PthreadId[MaxThreadNum] = {0};
 unsigned int g_PthreadMaxNum = ARRAY_SIZE(g_PthreadId);
 pthread_mutex_t g_PthreadMutex_h264;
 pthread_mutex_t g_PthreadMutexJpgDest;
+pthread_mutex_t g_PthreadMutexMonitor;
 
 extern void Destory_sock(void);
+
+union { 
+    char c[4]; 
+    unsigned long l; 
+} endian_test = { 'l', '?', '?', 'b' };
+
+#define ENDIANNESS ((char)endian_test.l)
+
 
 void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx)
 {
@@ -144,6 +156,7 @@ void *pthread_server(void *pdata)
 {
     int iClientFd, iServerFd, iRet, i;
     unsigned int uiSize = 0;
+    TOUPCAM_COMMON_REQUES_S stToupcam_common_req;
     struct sockaddr stClientaddr;
     socklen_t addrlen = sizeof(struct sockaddr_in);
     if(sock1->local < 0)
@@ -215,12 +228,17 @@ void *pthread_server(void *pdata)
 						}
 						printf("\n");
 						*/
-						uiSize = (*(pcBuffData+5)<<0) + (*(pcBuffData+6)<<8) + (*(pcBuffData+7)<<16) 
-						        + (*(pcBuffData+8)<<24);
-                        /* printf("size:%d\n", uiSize); */
-
-						g_ReqResFlag = *(pcBuffData+9+4);
-						common_hander(i, pcBuffData+10+4, uiSize-1);
+						memcpy(&stToupcam_common_req, g_cBuffData, sizeof(TOUPCAM_COMMON_REQUES_S));
+                        if(!iEndianness)
+                        {
+                           uiSize = BIGLITTLESWAP32(stToupcam_common_req.com.size[0]); 
+                        }
+                        else
+                        {
+                            uiSize = stToupcam_common_req.com.size[0];
+                        }
+						g_ReqResFlag = stToupcam_common_req.com.type;
+                        common_hander(i, (void *)&stToupcam_common_req, uiSize);
 					}
                     else
                     {
@@ -229,9 +247,9 @@ void *pthread_server(void *pdata)
                         close(i);
                     }
 					/* close */
+                    FD_CLR(i, &tmprdfs);
 				}
 			}
-            FD_CLR(i, &tmprdfs);
 		}
 	}
 
@@ -293,7 +311,7 @@ void Destory_Toupcam(void)
 int init_sock(void)
 {
     int iRet = ERROR_SUCCESS;
-    
+
     /* step 1 init dgram */
     iRet = socket_dgram_init();
     if(ERROR_SUCCESS == iRet)
@@ -322,8 +340,18 @@ void pthread_mutex_inits(void)
 {
     /* 初始化jpeg线程数据保护锁 */
     pthread_mutex_init(&g_PthreadMutexJpgDest, NULL);
+    pthread_mutex_init(&g_PthreadMutexMonitor, NULL);
     return;
 }
+
+void pthread_mutex_destroys()
+{
+    /* 销毁线程锁 */
+    pthread_mutex_destroy(&g_PthreadMutexJpgDest);
+    pthread_mutex_destroy(&g_PthreadMutexMonitor);
+    return;
+}
+
 
 int main(int, char**)
 {
@@ -336,6 +364,16 @@ int main(int, char**)
     if(ERROR_FAILED == iRet)
     {
         goto exit0_;
+    }
+
+    /* 大小端检测 */
+    if(ENDIANNESS == 'l')
+    {
+        iEndianness = 1;
+    }
+    else
+    {
+        iEndianness = 0;
     }
 
     /* 初始化线程锁 */
@@ -361,6 +399,7 @@ int main(int, char**)
         goto exit1_;
     }
 
+    pthread_mutex_destroys();
 
 exit1_:
     Destory_Toupcam();

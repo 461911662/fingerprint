@@ -12,7 +12,7 @@
 char g_cBuffData[TCP_BUFFER_SIZE] = {0};
 char g_ReqResFlag;
 
-void common_hander(int fd, char *pBuff, unsigned int uiSize)
+void common_hander(int fd, void *pBuff, unsigned int uiSize)
 {
     if(fd < 0 || NULL == pBuff)
     {
@@ -22,23 +22,22 @@ void common_hander(int fd, char *pBuff, unsigned int uiSize)
 
     int i, j;
     int iRet = 0;
-	char *pcBuf = (char *)pBuff;
-    for(i = 0; i < g_Comm_Entry_Size; i++)
+
+    TOUPCAM_COMMON_REQUES_S *pstToupcamReq = (TOUPCAM_COMMON_REQUES_S *)pBuff;
+    for(i=0; i<g_Comm_Entry_Size; i++)
     {
-        if(*pBuff == g_Comm_Entry[i].cmd_id)
+        if(pstToupcamReq->com.cmd = g_Comm_Entry[i].cmd_id)
         {
-            iRet = g_Comm_Entry[i].handle(fd, pBuff+1, uiSize-1);
-            printf("request(%d): cmd:%x,subcmd:%x %x,", fd, *pcBuf, *(pcBuf+1), *(pcBuf+2));
-            printf("uisize:%d\n", uiSize);
-            
-            for(j=3; j<uiSize; j++)
+            iRet = g_Comm_Entry[i].handle(fd, pstToupcamReq, uiSize);
+            printf("request(%d): cmd:%x,subcmd:%04x,", fd, pstToupcamReq->com.cmd, pstToupcamReq->com.subcmd);
+            for(j=0; j<uiSize; j++)
             {
-            	printf(" %x", pcBuf[j]);
+                printf(" %x", pstToupcamReq->data.resever[j]);
             }
             printf("\n     cc: %d\n", iRet);
-            
-        }
+       }
     }
+    return;
 }
 
 //创建sock套接字
