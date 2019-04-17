@@ -2,6 +2,7 @@
 #define _COMMON_TOUPCAM_H_
 #include "toupcam.h"
 
+#define REQUES_SIZE  (128)
 #define ARRAY_SIZE(a) sizeof(a)/sizeof(a[0])
 
 #define END_BUFF_SIZE         (0)
@@ -9,6 +10,7 @@
 #define TOUPCAM_COMMON_RESPON_HEADER_SIZE (18)
 #define IPV4
 #define BIGLITTLESWAP32(A) ((A&0xff)<<24 | (A&0xff00)<<8 | (A&0xff0000)>>8 | (A&0xff000000)>>24)
+#define BIGLITTLESWAP16(A) ((A&0xff)<<8 | (A&0xff00)>>8)
 
 enum TOUPCAM_CMD_E{
     /* toupcam cfg */
@@ -25,7 +27,7 @@ enum TOUPCAM_CMD_E{
     CMD_HISTOGRAMTYPE,      /* 直方图方式 */
     CMD_HISTOGRAM,          /* 直方图调节 */
     /* wifi cfg */
-    CMD_SETUDPADDR,         /* UDP 设置客户端地址 */
+    CMD_SETUDPADDR = 128,         /* UDP 设置客户端地址 */
 };
 
 enum TOUPCAM_CC_CODE_E{
@@ -64,7 +66,7 @@ typedef struct Toupcam_common_reques
     union Data {
         unsigned int ipv4;
         unsigned long long ipv6;
-        char resever[128];
+        char resever[REQUES_SIZE];
     }data;
 }__attribute__((packed))TOUPCAM_COMMON_REQUES_S;
 

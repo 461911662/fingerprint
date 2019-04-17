@@ -9,17 +9,18 @@
 
 static int setudpaddr(int fd, void *pdata)
 {
-    if(fd < 0)
+    if(fd < 0 || NULL == pdata)
     {
-        printf("socket fd is invaild.\n");
+        printf("%s: input param is invaild.\n", __func__);
         return ERROR_FAILED;
     }
-    TOUPCAM_COMMON_REQUES_S *pstToupcamReq = (TOUPCAM_COMMON_REQUES_S *)pdata;
-    TOUPCAM_COMMON_RESPON_S stToupcamRespon;
-    unsigned int uiIPV4Addr = 0;
-    int iTotalSize = 0;
-	int isize = 0;
+
     int iRet = 0;
+    int iTotalSize = 0;
+    unsigned int uiIPV4Def = 0;
+    unsigned int uiIPV4Addr = 0;
+    TOUPCAM_COMMON_RESPON_S stToupcamRespon;
+    TOUPCAM_COMMON_REQUES_S *pstToupcamReq = (TOUPCAM_COMMON_REQUES_S *)pdata;
 
     fillresponheader(&stToupcamRespon);
     stToupcamRespon.com.subcmd = CMD_SETUDPADDR;
@@ -29,6 +30,12 @@ static int setudpaddr(int fd, void *pdata)
     {
         printf("toupcam->m_hcam is invaild.\n");
         return ERROR_FAILED;
+    }
+
+    if(TCP_REQUEST != pstToupcamReq->com.type)
+    {
+        printf("IPV6 is not support yet.\n");
+        goto _exit0;
     }
 
 #ifdef IPV4
@@ -41,11 +48,11 @@ static int setudpaddr(int fd, void *pdata)
         uiIPV4Addr = pstToupcamReq->data.ipv4;
     }
 #elif IPV6
-        printf("IPV6 is not support yet.\n");
+        /* printf("IPV6 is not support yet.\n"); */
         goto _exit0;
 #endif
 
-    unsigned int uiIPV4Def = inet_addr(CLIENT_IP);
+    uiIPV4Def = inet_addr(CLIENT_IP);
     if(uiIPV4Def == sock->cliaddr->sin_addr.s_addr)
     {
         if(uiIPV4Def == uiIPV4Addr)

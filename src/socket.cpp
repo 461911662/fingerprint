@@ -26,15 +26,15 @@ void common_hander(int fd, void *pBuff, unsigned int uiSize)
     TOUPCAM_COMMON_REQUES_S *pstToupcamReq = (TOUPCAM_COMMON_REQUES_S *)pBuff;
     for(i=0; i<g_Comm_Entry_Size; i++)
     {
-        if(pstToupcamReq->com.cmd = g_Comm_Entry[i].cmd_id)
+        if(pstToupcamReq->com.cmd == g_Comm_Entry[i].cmd_id)
         {
             iRet = g_Comm_Entry[i].handle(fd, pstToupcamReq, uiSize);
-            printf("request(%d): cmd:%x,subcmd:%04x,", fd, pstToupcamReq->com.cmd, pstToupcamReq->com.subcmd);
-            for(j=0; j<uiSize; j++)
+            printf("request(%d): cmd:%02x,subcmd:%04x,", fd, pstToupcamReq->com.cmd, pstToupcamReq->com.subcmd);
+            for(j=0; j<uiSize-4; j++)
             {
-                printf(" %x", pstToupcamReq->data.resever[j]);
+                printf("%02x,", pstToupcamReq->data.resever[j]);
             }
-            printf("\n     cc: %d\n", iRet);
+            printf("cc: %d\n", iRet);
        }
     }
     return;

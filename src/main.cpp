@@ -231,7 +231,7 @@ void *pthread_server(void *pdata)
 						memcpy(&stToupcam_common_req, g_cBuffData, sizeof(TOUPCAM_COMMON_REQUES_S));
                         if(!iEndianness)
                         {
-                           uiSize = BIGLITTLESWAP32(stToupcam_common_req.com.size[0]); 
+                           uiSize = BIGLITTLESWAP32(stToupcam_common_req.com.size[0]);
                         }
                         else
                         {

@@ -32,17 +32,19 @@ int m_memcopy(void* des, void* src, unsigned int size)
 
 /* unsigned char g_pcData[425984+1] = {0}; */
 
-static int blackrorator(int fd)
+static int blackrorator(int fd, void *pdata)
 {
-    if(fd < 0)
+    if(fd < 0 || NULL == pdata)
     {
-        printf("socket fd is invaild.\n");
+        printf("%s: input param is invaild.\n", __func__);
         return ERROR_FAILED;
     }
-    TOUPCAM_COMMON_RESPON_S stToupcamRespon;
-    int iTotalSize = 0;
-	int isize = 0;
+
+    HRESULT hr;
     int iRet = 0;
+    int *pibNegative = NULL;
+    TOUPCAM_COMMON_RESPON_S stToupcamRespon;
+    TOUPCAM_COMMON_REQUES_S *pstToupcamReq = (TOUPCAM_COMMON_REQUES_S *)pdata;
 
     fillresponheader(&stToupcamRespon);
     stToupcamRespon.com.subcmd = CMD_BLACKRORATOR;
@@ -53,11 +55,16 @@ static int blackrorator(int fd)
         printf("toupcam->m_hcam is invaild.\n");
         return ERROR_FAILED;
     }
+    
+    if(TCP_REQUEST != pstToupcamReq->com.type)
+    {
+        goto _exit0;
+    }
 
     /* lock */
     pthread_mutex_lock(&g_PthreadMutexMonitor);
-    int *pibNegative = &g_pstTouPcam->bNegative;
-    HRESULT hr = Toupcam_get_Negative(g_pstTouPcam->m_hcam, pibNegative);
+    pibNegative = &g_pstTouPcam->bNegative;
+    hr = Toupcam_get_Negative(g_pstTouPcam->m_hcam, pibNegative);
     if (FAILED(hr))
     {
         printf("toupcam get Negative failed!\n");
@@ -79,8 +86,7 @@ static int blackrorator(int fd)
     {
         printf("socket (%d) send failed!\n", fd);
         goto _exit0;
-    }
-    
+    }    
     return ERROR_SUCCESS;
 
 _exit0:
@@ -91,82 +97,37 @@ _exit0:
 
 }
 
-static int snapshot(int fd)
+static int snapshot(int fd, void *pdata)
 {
-    if(fd < 0)
+    if(fd < 0 || NULL == pdata)
     {
-        printf("socket fd is invaild.\n");
+        printf("%s: input param is invaild.\n", __func__);
         return ERROR_FAILED;
     }
-    TOUPCAM_COMMON_RESPON_S stToupcamRespon;
-    int iTotalSize = 0;
+
+    HRESULT hr;
 	int isize = 0;
+    int iTotalSize = 0;
+    char *pBuffer = NULL;
+    char * pucJpgDest = NULL;
+    TOUPCAM_COMMON_RESPON_S stToupcamRespon;
+    TOUPCAM_COMMON_REQUES_S *pstToupcamReq = (TOUPCAM_COMMON_REQUES_S *)pdata;
 
     fillresponheader(&stToupcamRespon);
     stToupcamRespon.com.subcmd = CMD_SNAPPICTURE;
     stToupcamRespon.com.size[0] = INVAILD_BUFF_SIZE;
 
-	/*
-	*debug: foreach send memcpy
-
-	//iTotalSize = 425984 + (425984/TCP_BUFFERSIZE + (425984%TCP_BUFFERSIZE?1:0))*12;
-	iTotalSize = 425984;
-	printf("iTotalSize:%d\n", iTotalSize);
-	char *pBuffer = (char *)malloc(TCP_BUFFERSIZE+12);
-	if(NULL == pBuffer)
-	{
-		perror("stToupcamRespon.pdata");
-		return ERROR_FAILED;
-	}
-
-	g_pcData[0] = 'a';
-	g_pcData[5] = 'b';
-	g_pcData[425979] = 'a';
-	g_pcData[425983] = 'b';	
-	memset(pBuffer, 0, TCP_BUFFERSIZE+12);
-
-	if(iTotalSize > TCP_BUFFERSIZE)
-	{
-		isize = TCP_BUFFERSIZE;
-	}
-	else
-	{
-		isize = iTotalSize;
-	}
-
-	char * g_pclData = (char *)g_pcData;
-
-	while(1)
-	{
-		if(iTotalSize <= 0)
-		{
-			break;
-		}
-		
-		isize = iTotalSize>TCP_BUFFERSIZE?TCP_BUFFERSIZE:iTotalSize;
-		stToupcamRespon.com.size = isize;
-		
-		memset(pBuffer, 0, isize+TOUPCAM_COMMON_RESPON_HEADER_SIZE);
-		m_memcopy(pBuffer, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE);
-		m_memcopy(pBuffer+TOUPCAM_COMMON_RESPON_HEADER_SIZE, g_pclData, isize);
-		
-		send(fd, pBuffer, isize+TOUPCAM_COMMON_RESPON_HEADER_SIZE, 0);
-		
-		g_pclData += isize;
-		iTotalSize -= isize;
-
-	}
-
-	free(pBuffer);
-	return ERROR_SUCCESS;
-	*/	
-
+    if(TCP_REQUEST != pstToupcamReq->com.type)
+    {
+        goto _exit0;
+    }
+	
     if(!g_pstTouPcam->m_hcam)
     {
         printf("toupcam->m_hcam is invaild.\n");
         return ERROR_FAILED;
     }
-    HRESULT hr = Toupcam_Snap(g_pstTouPcam->m_hcam, 1); /* 抓拍当前2048x2044 */
+    hr = Toupcam_Snap(g_pstTouPcam->m_hcam, 1); /* 抓拍当前2048x2044 */
     if (FAILED(hr))
     {
         printf("picture arrived failly(%lld)!\n", hr);
@@ -181,14 +142,14 @@ static int snapshot(int fd)
         {
             /* iTotalSize = TDIBWIDTHBYTES(g_pstTouPcam->inMaxWidth * 24) * g_pstTouPcam->inMaxHeight; */
             iTotalSize = giJpgSize;
-            char *pBuffer = (char *)malloc(TCP_BUFFERSIZE+TOUPCAM_COMMON_RESPON_HEADER_SIZE);
+            pBuffer = (char *)malloc(TCP_BUFFERSIZE+TOUPCAM_COMMON_RESPON_HEADER_SIZE);
             if(NULL == pBuffer)
             {
                 perror("stToupcamRespon.pdata");
                 goto _exit0;
             }
 
-			char * pucJpgDest = (char *)g_pucJpgDest;
+			pucJpgDest = (char *)g_pucJpgDest;
             /*
             FILE *fp = fopen("myjpeg.jpeg", "ab+");
             if(NULL == fp)
@@ -209,12 +170,6 @@ static int snapshot(int fd)
 
 				isize = iTotalSize>TCP_BUFFERSIZE?TCP_BUFFERSIZE:iTotalSize;
 				stToupcamRespon.com.size[0] = isize;
-
-                /*
-				memset(pBuffer, 0, isize+TOUPCAM_COMMON_RESPON_HEADER_SIZE);
-				m_memcopy(pBuffer, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE);
-				m_memcopy(pBuffer+TOUPCAM_COMMON_RESPON_HEADER_SIZE, pucJpgDest, isize);
-                */
                 
 				memset(pBuffer, 0, isize);
 				m_memcopy(pBuffer, pucJpgDest, isize);
@@ -260,32 +215,22 @@ int common_toupcam_cmd(int fd, void *pdata, unsigned short usSize)
     }
     TOUPCAM_COMMON_REQUES_S *pstToupcamReq = (TOUPCAM_COMMON_REQUES_S *)pdata;
 
-    unsigned int usCmd = 0;
+    unsigned short usCmd = 0;
     if(!iEndianness)
     {
-        usCmd = BIGLITTLESWAP32(pstToupcamReq->com.subcmd);
+        usCmd = BIGLITTLESWAP16(pstToupcamReq->com.subcmd);
     }
     else
     {
         usCmd = pstToupcamReq->com.subcmd;
     }
 
-    /*
-    if(0 != *pucData)
-    {
-        usCmd = *pucData | *(pucData+1);
-    }
-    else
-    {
-        usCmd = (unsigned int)*(pucData+1);
-    }
-    */
     switch(usCmd)
     {
         case CMD_SNAPPICTURE:
-            return snapshot(fd);
+            return snapshot(fd, pdata);
         case CMD_BLACKRORATOR:
-            return blackrorator(fd);
+            return blackrorator(fd, pdata);
         case CMD_ZONEEXPO:
             break;
         case CMD_BRIGHTNESSTYPE:
