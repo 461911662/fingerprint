@@ -7,6 +7,7 @@
 
 #define END_BUFF_SIZE         (0)
 #define INVAILD_BUFF_SIZE     (1)
+#define COMMON_BUFF_SIZE      (5)
 #define TOUPCAM_COMMON_RESPON_HEADER_SIZE (18)
 #define IPV4
 #define BIGLITTLESWAP32(A) ((A&0xff)<<24 | (A&0xff00)<<8 | (A&0xff0000)>>8 | (A&0xff000000)>>24)
@@ -35,7 +36,7 @@ enum TOUPCAM_CC_CODE_E{
     ERROR_FAILED,
     ERROR_WIFI_ADDR_EXIST = 2,
     ERROR_WIFI_ADDR_HOLD = 3,
-    NOTSUPPORT,
+    NOTSUPPORT=255,
 };
 
 enum COMMON_CMD_E{
@@ -70,11 +71,6 @@ typedef struct Toupcam_common_reques
     }data;
 }__attribute__((packed))TOUPCAM_COMMON_REQUES_S;
 
-typedef struct Toupcam_ExpoTime
-{
-
-}TOUPCAM_EXPOTIME_S;
-
 typedef struct Texpo
 {
     /* Toupcam相机曝光参数 */
@@ -89,14 +85,42 @@ typedef struct Texpo
     unsigned nDef;                  /* 曝光的默认时间 */
     unsigned short AGain;           /* 模拟增益，百分比，如200表示增益200% */
     unsigned short AnMin;           /* 模拟增益的最小时间 */
-    unsigned short AnMax;            /* 模拟增益的最大时间 */
-    unsigned short AnDef;            /* 模拟增益的默认时间 */
+    unsigned short AnMax;           /* 模拟增益的最大时间 */
+    unsigned short AnDef;           /* 模拟增益的默认时间 */
+    pthread_mutex_t mutex;          /* 保护曝光AutoTarget,亮度AGain */   
 }TEXPO_S;
 
+typedef struct Tcolor
+{
+    int Hue;                        /* 色度 */
+    int Saturation;                 /* 饱和度 */
+    int Brightness;                 /* 亮度 */
+    int Contrast;                   /* 对比度 */
+    int Gamma;                      /* 伽玛 */
+    pthread_mutex_t mutex;          /* 设置相机保护锁 */  
+}TCOLOR_S;
 
+typedef struct TWhiteBalance{
+    int iauto;                      /* 白平衡自动使能 */
+    int Temp;                       /* 白平衡色温 */
+    int Tint;                       /* 白平衡微调 */
+    int RGain;                      /* 白平衡Red    Gain */
+    int GGain;                      /* 白平衡Green    Gain */
+    int BGain;                      /* 白平衡Blue    Gain */
+    pthread_mutex_t mutex;          /* 设置白平衡保护锁 */
+}TWHITEBALANCE_S;
+
+typedef struct Toupcam_instance{
+    char sn[32];
+    char fwver[16];
+    char hwver[16];
+    char pdate[10];
+    unsigned short pRevision;
+}TOUPCAM_INS_S;
 
 typedef struct Toupcam
 {
+    TOUPCAM_INS_S m_ins; /* Toupcam实例 */
     int inWidth;    /* 当前图片的有效宽度 */
     int inHeight;   /* 当前图片的有效高度 */
     int inMaxWidth;    /* 当前图片的支持最大有效宽度 */
@@ -106,44 +130,54 @@ typedef struct Toupcam
 	void*	m_pImageData; /* 当前Toupcam的数据Buffer */
     void*   m_PStaticImageData;  /* 快速抓拍使用的数据Buffer */
 	BITMAPINFOHEADER m_header;
-    int bNegative;               /* 照片是否反转 */
-    TEXPO_S stTexpo;
+    int bNegative;                      /* 图像是否反转 */
+    int iFrameRate;                     /* 相机的帧率 */
+    int iVFlip;                         /* 垂直翻转 */
+    int iHFlip;                         /* 水平翻转 */
+    TEXPO_S stTexpo;                    /* 相机曝光参数设置 */
+    TWHITEBALANCE_S stWhiteBlc;     /* 相机白平衡参数 */
+    TCOLOR_S stTcolor;                  /* 相机颜色参数设置 */
 
-    /* Toupcam wifi cmd */
-    struct Toupcam_wifi{
-        TOUPCAM_COMMON_HEADER_S mCommon;
-        
-        TOUPCAM_EXPOTIME_S mExpoTime;
+    int m_color;                    /* 0:gray 1:color */
+    int m_sample;                   /* skip or bin */
+    int m_nHz;                      /* 交流50Hz,交流60Hz,直流 */
 
-        unsigned int cmd_id;
-        void *private_data;
-#if separate
-        /* tcp request */
-        union{
-            struct ExpoTime{
-                unsigned int i;
-            };
-        
-        }ToupcamReq_U;
-        
-        /* tcp respon */
-        union{
-            int cc;            
-        }ToupcamRes_U;  
+#if 0    
+    union mode_color{                   /* 色彩模式 */   
+        struct mode{
+            unsigned char resever:6;
+            unsigned char color:1;     /* 多彩模式 */
+            unsigned char gray:1;      /* 黑白模式 */
+        }stMode;
+        unsigned char ucMode;
+    }m_color;
 
-        void *private_data;
+    union mode_sample{           /* 采样模式 */
+        struct mode{
+            unsigned char resever:6;
+            unsigned char bin:1;       /* 邻域采样 */ 
+            unsigned char skip:1;      /* 抽样提取 */
+        }stMode;
+        unsigned char ucMode;
+    }m_sample;
+        
+    union mode_powersource{           /* 电源模式 */
+        struct mode{
+            unsigned int resever:29;
+            unsigned int ac50:1;        /* 交流50Hz */    
+            unsigned int ac60:1;        /* 交流60Hz */
+            unsigned int dc:1;          /* 直流 */
+        }stMode;
+        unsigned int ucMode;
+    }m_powersource;
 #endif
-    };
-
-    
-  
 
     /* opreation */
+    unsigned int (*OpenDevice)();
     unsigned int (*PreInitialDevice)(void *);
-    unsigned int (*OpenDevice)(void *);
-    unsigned int (*StartDevice)(void);
-    unsigned int (*ConfigDevice)(void);
-    unsigned int (*CloseDevice)(void);
+    unsigned int (*ConfigDevice)(void *);
+    unsigned int (*StartDevice)(void *);
+    unsigned int (*CloseDevice)(void *);
 
     /* event */
     void (*OnEventError)(void);
@@ -180,7 +214,7 @@ extern unsigned int iEndianness;
 extern struct sockets *sock; /* udp potr:5004 */
 extern struct sockets *sock1; /* tcp potr:5005 */
 
-extern unsigned int init_Toupcam(void);
+extern unsigned int init_Toupcam(void *pdata);
 extern unsigned int SetupToupcam(TOUPCAM_S* pToupcam);
 extern void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx);
 extern void* getToupcam(void);

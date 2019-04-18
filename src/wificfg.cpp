@@ -71,7 +71,7 @@ static int setudpaddr(int fd, void *pdata)
         sock->cliaddr->sin_addr.s_addr = uiIPV4Def;
     }
 
-    stToupcamRespon.com.size[0] = END_BUFF_SIZE;
+    stToupcamRespon.com.size[0] = COMMON_BUFF_SIZE;
     iRet = send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE, 0);
     if(iRet <= 0)
     {

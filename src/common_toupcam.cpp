@@ -48,6 +48,10 @@ void OnEventExpo();
 void OnEventTempTint();
 void OnEventStillImage();
 static unsigned int SetAutoExpo_Toupcam();
+static unsigned int Set_WhiteBalanceToupcam();
+static unsigned int Set_ColorToupcam();
+static unsigned int Set_ToupcamOrientation();
+
 
 COM_ENTRY_S g_Comm_Entry[] = {
     {COMCMD_WIFICFG, common_wifi_cmd},
@@ -63,10 +67,164 @@ COM_TOUPCAM_ENTRY_S g_ComToupcam_Entry[] = {
 };
 
 /*
-* Toupcam 通用回调函数集
+* Toupcam 提前初始化函数
 */
-//unsigned int PreInitialDevice(TOUPCAM_S *pTmpToupcam)
 unsigned int PreInitialDevice(void *pvoid)
+{
+    if(NULL == pvoid)
+    {
+        printf("%s: pvoid is null.\n", __func__);
+        return ERROR_FAILED;
+    }
+    TOUPCAM_S *pTmpToupcam = (TOUPCAM_S *)pvoid;
+    HRESULT hr;
+    hr = Toupcam_get_SerialNumber(pTmpToupcam->m_hcam, pTmpToupcam->m_ins.sn);
+    if(FAILED(hr))
+    {
+        toupcamerrinfo(hr);
+    }
+    
+    hr = Toupcam_get_FwVersion(pTmpToupcam->m_hcam, pTmpToupcam->m_ins.fwver);
+    if(FAILED(hr))
+    {
+        toupcamerrinfo(hr);
+    }
+
+    hr = Toupcam_get_HwVersion(pTmpToupcam->m_hcam, pTmpToupcam->m_ins.hwver);
+    if(FAILED(hr))
+    {
+        toupcamerrinfo(hr);
+    }
+
+    hr = Toupcam_get_ProductionDate(pTmpToupcam->m_hcam, pTmpToupcam->m_ins.pdate);
+    if(FAILED(hr))
+    {
+        toupcamerrinfo(hr);
+    }
+
+    hr = Toupcam_get_Revision(pTmpToupcam->m_hcam, &pTmpToupcam->m_ins.pRevision);
+    if(FAILED(hr))
+    {
+        toupcamerrinfo(hr);
+    }
+
+    printf("#######################################################\n");
+    printf("############ \033[40;31mlaplat camera program start \033[0m##############\n");
+    printf("#######################################################\n\n");
+
+    printf("%17s\033[40;31%s\033[0m\n", "Toupcam sn:", pTmpToupcam->m_ins.sn[0]?pTmpToupcam->m_ins.sn:"null");
+    printf("%17s\033[40;31%s\033[0m\n", "Toupcam fwver:", pTmpToupcam->m_ins.fwver[0]?pTmpToupcam->m_ins.fwver:"null");
+    printf("%17s\033[40;31%s\033[0m\n", "Toupcam hwver:", pTmpToupcam->m_ins.hwver[0]?pTmpToupcam->m_ins.hwver:"null");
+    printf("%17s\033[40;31%s\033[0m\n", "Toupcam date:", pTmpToupcam->m_ins.pdate[0]?pTmpToupcam->m_ins.pdate:"null");
+    printf("%17s\033[40;31%d\033[0m\n", "Toupcam Revision:", pTmpToupcam->m_ins.pRevision?pTmpToupcam->m_ins.pRevision:0);
+
+    if(!pTmpToupcam->m_ins.sn[0] || !pTmpToupcam->m_ins.fwver[0] || !pTmpToupcam->m_ins.hwver[0]
+        || !pTmpToupcam->m_ins.pdate[0] || !pTmpToupcam->m_ins.pRevision)
+    {
+        return ERROR_FAILED;
+    }
+
+    return ERROR_SUCCESS;
+}
+
+
+/*
+* 打开一个摄像头设备
+*/
+unsigned int OpenDevice()
+{ 
+    g_hcam = Toupcam_Open(NULL);
+    if(NULL == g_hcam)
+    {
+        printf("no Toupcam device.\n");
+        return ERROR_FAILED;
+    }
+    g_pstTouPcam->m_hcam = g_hcam;
+
+    return ERROR_SUCCESS;
+}
+
+/*
+* 开启摄像头设备
+*/
+unsigned int StartDevice(void *pvoid)
+{
+    if(NULL == pvoid)
+    {
+        printf("%s: pvoid is null.\n", __func__);
+        return ERROR_FAILED;
+    }
+    TOUPCAM_S *pToupcam = (TOUPCAM_S *)pvoid;
+    unsigned int uiCallbackContext = 0;
+    int iRet = ERROR_SUCCESS;
+    
+    /* 申请足够大的数据Buffer1 preview         */
+    if(pToupcam->m_header.biSizeImage > 0)
+    {
+        if(NULL == g_pImageData)
+        {
+            free(g_pImageData);
+            g_pImageData = NULL;
+        }
+        g_pImageData = malloc(pToupcam->m_header.biSizeImage);
+        if(NULL == g_pImageData)
+        {
+            perror("SetupToupcam g_pImageData");
+            return ERROR_FAILED;
+        }
+    }
+    pToupcam->m_pImageData = g_pImageData;
+
+    /* buffer2 static picture */
+    if(pToupcam->iSnapSize > 0)
+    {
+        if(NULL == g_pStaticImageData)
+        {
+            free(g_pStaticImageData);
+            g_pStaticImageData = NULL;
+        }
+        g_pStaticImageData = malloc(pToupcam->iSnapSize);
+        if(NULL == g_pStaticImageData)
+        {
+            perror("SetupToupcam g_pStaticImageData");
+            return ERROR_FAILED;
+        }
+    }
+    pToupcam->m_PStaticImageData = g_pStaticImageData;
+
+    av_register_all();
+
+    initX264Encoder(x264Encoder,"myCamera.h264");
+
+    printf("pTmpToupcam->inWidth:%d, pTmpToupcam->inHeight:%d\n", g_pstTouPcam->inWidth, g_pstTouPcam->inHeight);
+    printf("pTmpToupcam->inMaxWidth:%d, pTmpToupcam->inMaxHeight:%d\n", g_pstTouPcam->inMaxWidth, g_pstTouPcam->inMaxHeight);
+
+    /* 开启拉模式视频 */
+    iRet = Toupcam_StartPullModeWithCallback(pToupcam->m_hcam, EventCallback, &uiCallbackContext);
+    if (FAILED(iRet))
+    {
+        printf("failed to start camera, hr = %08x\n", iRet);
+    }
+    else if(uiCallbackContext)
+    {
+        printf("Toupcam Event(%d):", uiCallbackContext);
+        return toupcamerrinfo(uiCallbackContext)?ERROR_FAILED:ERROR_SUCCESS;
+    }
+    else
+    {
+        printf("press any key to exit\n");
+        getc(stdin);
+        return ERROR_FAILED;
+    }
+    
+    return ERROR_SUCCESS;
+
+}
+
+/*
+* 配置一个摄像头设备
+*/
+unsigned int ConfigDevice(void *pvoid)
 {
     if(NULL == pvoid)
     {
@@ -114,16 +272,75 @@ unsigned int PreInitialDevice(void *pvoid)
     }
 
     /* 设置Toupcam自动曝光 */
-    //iRet = SetAutoExpo_Toupcam();
+    iRet = SetAutoExpo_Toupcam();
     if(ERROR_FAILED == iRet)
     {
         return ERROR_FAILED;
     }
 
+    /* 白平衡设置 */
+    iRet = Set_WhiteBalanceToupcam();
+    if(ERROR_FAILED == iRet)
+    {
+        return ERROR_FAILED;
+    }
+   
+    /* 颜色设置 */
+    iRet = Set_ColorToupcam();
+    if(ERROR_FAILED == iRet)
+    {
+        return ERROR_FAILED;
+    }
+
+    /* 帧率设置 */
+    g_pstTouPcam->iFrameRate = 30;
+    iRet = Toupcam_put_Option(g_pstTouPcam->m_hcam, TOUPCAM_OPTION_FRAMERATE, g_pstTouPcam->iFrameRate);
+    if(FAILED(iRet))
+    {
+        printf("%s: set frame rate failed.\n", __func__);
+        return ERROR_FAILED;
+    }
+
+    /* 色彩模式设置 */
+    iRet = Toupcam_get_Chrome(g_pstTouPcam->m_hcam, &g_pstTouPcam->m_color);
+    if(FAILED(iRet))
+    {
+        printf("%s: get chrome failed.\n", __func__);
+        return ERROR_FAILED;
+    }
+  
+    /* 翻转设置 */
+    iRet = Set_ToupcamOrientation();
+    if(ERROR_FAILED == iRet)
+    {
+        return ERROR_FAILED;
+    }
+
+    /* 采样方式设置 */
+    iRet = Toupcam_get_Mode(g_pstTouPcam->m_hcam, &g_pstTouPcam->m_sample);
+    if(FAILED(iRet))
+    {
+        printf("%s: get sample failed.\n", __func__);
+        //return ERROR_FAILED;
+    }
+
+    /* 光源频率设置 */
+    iRet = Toupcam_get_HZ(g_pstTouPcam->m_hcam, &g_pstTouPcam->m_nHz);
+    if(FAILED(iRet))
+    {
+        printf("%s: get power source Hz failed.\n", __func__);
+        return ERROR_FAILED;
+    }
+
     return ERROR_SUCCESS;
+
+
 }
 
-unsigned int OpenDevice(void *pvoid)
+/*
+* 关掉一个摄像头设备
+*/
+unsigned int CloseDevice(void *pvoid)
 {
     if(NULL == pvoid)
     {
@@ -132,24 +349,11 @@ unsigned int OpenDevice(void *pvoid)
     }
     TOUPCAM_S *pTmpToupcam = (TOUPCAM_S *)pvoid;
     
-    g_hcam = Toupcam_Open(NULL);
-    if(NULL == g_hcam)
-    {
-        printf("no Toupcam device.\n");
-        return ERROR_FAILED;
-    }
-    pTmpToupcam->m_hcam = g_hcam;
+    Toupcam_Close(pTmpToupcam->m_hcam);
+    pTmpToupcam->m_hcam = NULL;
+    g_hcam = NULL;
 
     return ERROR_SUCCESS;
-}
-unsigned int StartDevice(void)
-{
-}
-unsigned int ConfigDevice(void)
-{
-}
-unsigned int CloseDevice(void)
-{
 }
 
 /*
@@ -221,8 +425,8 @@ static unsigned int _init(void)
     g_pstTouPcam->m_header.biBitCount = 24;
 
     /*初始化Toupcam函数注册*/
-    g_pstTouPcam->PreInitialDevice = PreInitialDevice;
     g_pstTouPcam->OpenDevice = OpenDevice;
+    g_pstTouPcam->PreInitialDevice = PreInitialDevice;
     g_pstTouPcam->StartDevice = StartDevice;
     g_pstTouPcam->ConfigDevice = ConfigDevice;
     g_pstTouPcam->CloseDevice = CloseDevice;
@@ -233,20 +437,6 @@ static unsigned int _init(void)
 }
 
 /*
-* 打开一个Toupcam摄像头设备
-*/
-
-void* getToupcam()
-{
-    if(NULL != g_pstTouPcam)
-    {
-        return g_pstTouPcam;
-    }
-
-    return NULL;
-}
-
-/*
 * 定制toupcam配置
 */
 int setToupcamDefaultCfg()
@@ -254,6 +444,7 @@ int setToupcamDefaultCfg()
     
 }
 
+#if 0
 /*
 * 在系统上安装一个摄像头
 */
@@ -342,63 +533,171 @@ unsigned int SetupToupcam(TOUPCAM_S* pToupcam)
     
     return ERROR_SUCCESS;
 }
-
+#endif
 
 /*
 * 设置Toupcam曝光参数为自动
 */
 static unsigned int SetAutoExpo_Toupcam()
 {
-    int  bEnableAutoExpo = 1;
-    unsigned short  bEnableAutoExpo1 = 1;
-    unsigned int nMinExpTime, nMaxExpTime, nDefExpTime;
-    unsigned short nMaxAGain;
-    if(NULL != g_pstTouPcam->m_hcam)
-    {
-        Toupcam_get_AutoExpoEnable(g_pstTouPcam->m_hcam, &bEnableAutoExpo);
-    }
-    else
+    if(NULL == g_pstTouPcam->m_hcam)
     {
         printf("%s: m_hcam is null.\n", __func__);
         return ERROR_FAILED;
     }
 
-    if(!bEnableAutoExpo)
+    /*初始化自动曝光锁*/
+    pthread_mutex_init(&g_pstTouPcam->stTexpo.mutex, NULL);
+    Toupcam_get_AutoExpoEnable(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.bAutoExposure);
+
+    pthread_mutex_lock(&g_pstTouPcam->stTexpo.mutex);
+    if(!g_pstTouPcam->stTexpo.bAutoExposure)
     {
-        bEnableAutoExpo = 1;
-        Toupcam_put_AutoExpoEnable(g_pstTouPcam->m_hcam, bEnableAutoExpo);
+        g_pstTouPcam->stTexpo.bAutoExposure = 1;
+        Toupcam_put_AutoExpoEnable(g_pstTouPcam->m_hcam, g_pstTouPcam->stTexpo.bAutoExposure);
         printf("auto expo is enable.\n");
     }
 
-    Toupcam_get_AutoExpoTarget(g_pstTouPcam->m_hcam, &bEnableAutoExpo1);
-    if(!bEnableAutoExpo1)
+    Toupcam_get_AutoExpoTarget(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.AutoTarget);
+    if(120 != g_pstTouPcam->stTexpo.AutoTarget) /* default expo 120 */
     {
-        bEnableAutoExpo = 1;
-        Toupcam_put_AutoExpoTarget(g_pstTouPcam->m_hcam, bEnableAutoExpo1);
-        printf("auto expo target is enable.\n");
+        g_pstTouPcam->stTexpo.AutoTarget = 120;
+        Toupcam_put_AutoExpoTarget(g_pstTouPcam->m_hcam, g_pstTouPcam->stTexpo.AutoTarget);
+        printf("auto expo target is %d.\n", g_pstTouPcam->stTexpo.AutoTarget);
     }
 
     /*Toupcam_put_MaxAutoExpoTimeAGain();*/
-    Toupcam_get_MaxAutoExpoTimeAGain(g_pstTouPcam->m_hcam, &nMaxExpTime, &nMaxAGain);
-     printf("expo time max:%u, default:%u.\n", nMaxExpTime, nMaxAGain);
+    Toupcam_get_MaxAutoExpoTimeAGain(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.AutoMaxTime, &g_pstTouPcam->stTexpo.AutoMaxAGain);
+    pthread_mutex_unlock(&g_pstTouPcam->stTexpo.mutex);
+
+    printf("cur max expo time:%u, max agin time:%u.\n", g_pstTouPcam->stTexpo.AutoMaxTime, g_pstTouPcam->stTexpo.AutoMaxAGain);
     
+    return ERROR_SUCCESS;
 }
 
 /*
-* 设置Toupcam曝光参数为手动，并设置对应参数
+* 设置Toupcam白平衡参数为自动
 */
-static unsigned int SetManuExpo_Toupcam()
+static unsigned int Set_WhiteBalanceToupcam()
 {
+    if(NULL == g_pstTouPcam)
+    {
+        printf("%s: g_pstToupcam is null\n", __func__);
+        return ERROR_FAILED;
+    }
+    HRESULT hr = 0;
+    int iTTCtx = 0;
+    PITOUPCAM_TEMPTINT_CALLBACK fnTTProc = NULL;
 
+    /* set auto white balance mode as Temp/Tint */
+    /* auto white balance "one push". This function must be called AFTER Toupcam_StartXXXX */
+    hr = Toupcam_AwbOnePush(g_pstTouPcam->m_hcam, fnTTProc, (void *)&iTTCtx);
+    if(FAILED(hr))
+    {
+        printf("set white balance fnTTProc failed!\n");
+        //return ERROR_FAILED;
+    }
+
+    /* 初始化锁 */
+    pthread_mutex_init(&g_pstTouPcam->stWhiteBlc.mutex, NULL);
+    
+    pthread_mutex_lock(&g_pstTouPcam->stWhiteBlc.mutex);
+    g_pstTouPcam->stWhiteBlc.iauto = 1;
+
+    hr = Toupcam_get_TempTint(g_pstTouPcam->m_hcam, &g_pstTouPcam->stWhiteBlc.Temp, &g_pstTouPcam->stWhiteBlc.Tint);
+    if(FAILED(hr))
+    {
+        printf("init Temp,Tint failed!\n");
+        pthread_mutex_unlock(&g_pstTouPcam->stWhiteBlc.mutex);
+        //return ERROR_FAILED;
+    }
+    printf("White balance Temp:%d, Tint:%d\n", g_pstTouPcam->stWhiteBlc.Temp, g_pstTouPcam->stWhiteBlc.Tint);
+    pthread_mutex_unlock(&g_pstTouPcam->stWhiteBlc.mutex);
+
+    return ERROR_SUCCESS;
 }
+
+/*
+* 设置Toupcam颜色衡参数
+*/
+static unsigned int Set_ColorToupcam()
+{
+    if(NULL == g_pstTouPcam)
+    {
+        printf("%s: g_pstToupcam is null\n", __func__);
+        return ERROR_FAILED;
+    }
+    /*初始化自动曝光锁*/
+    pthread_mutex_init(&g_pstTouPcam->stTcolor.mutex, NULL);
+    pthread_mutex_lock(&g_pstTouPcam->stTcolor.mutex);
+    g_pstTouPcam->stTcolor.Contrast = 0;
+    HRESULT hr = Toupcam_put_Contrast(g_pstTouPcam->m_hcam, g_pstTouPcam->stTcolor.Contrast);
+    if(FAILED(hr))
+    {
+        printf("init Color failed!\n");
+        pthread_mutex_unlock(&g_pstTouPcam->stTcolor.mutex);
+        return ERROR_FAILED;
+    }
+
+    g_pstTouPcam->stTcolor.Gamma = 100;
+    hr = Toupcam_put_Gamma(g_pstTouPcam->m_hcam, g_pstTouPcam->stTcolor.Gamma);
+    if(FAILED(hr))
+    {
+        printf("init Color failed!\n");
+        pthread_mutex_unlock(&g_pstTouPcam->stTcolor.mutex);
+        return ERROR_FAILED;
+    }    
+
+    pthread_mutex_unlock(&g_pstTouPcam->stTcolor.mutex);
+    return ERROR_SUCCESS;
+}
+
+/*
+* 设置Toupcam图像方向
+*/
+static unsigned int Set_ToupcamOrientation()
+{
+    if(NULL == g_pstTouPcam)
+    {
+        printf("%s: g_pstToupcam is null\n", __func__);
+        return ERROR_FAILED;
+    }
+    HRESULT hr = Toupcam_get_VFlip(g_pstTouPcam->m_hcam, &g_pstTouPcam->iVFlip);
+    if(FAILED(hr))
+    {
+        printf("init vFlip failed!\n");
+        return ERROR_FAILED;
+    }
+    hr = Toupcam_get_HFlip(g_pstTouPcam->m_hcam, &g_pstTouPcam->iHFlip);
+    if(FAILED(hr))
+    {
+        printf("init Hflip failed!\n");
+        return ERROR_FAILED;
+    }
+
+    /* 图像倒置 */
+    hr = Toupcam_put_Option(g_pstTouPcam->m_hcam, TOUPCAM_OPTION_UPSIDE_DOWN, 1);
+    if(FAILED(hr))
+    {
+        printf("%s: set frame rate failed.\n", __func__);
+        return ERROR_FAILED;
+    }
+
+    return ERROR_SUCCESS;
+}
+
 
 /*
 * 初始化Toupcam数据结构
 */
-unsigned int init_Toupcam(void)
+unsigned int init_Toupcam(void *pdata)
 {
-    int iRet = 0;
-    TOUPCAM_S* pToupcam = g_pstTouPcam;
+    if(NULL != pdata)
+    {
+        free(pdata);
+        pdata = NULL;
+    }
+    int iRet = ERROR_SUCCESS;
 
     /*初始化Toupcam数据结构中必要的函数*/
     iRet = _init();

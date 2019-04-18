@@ -80,7 +80,7 @@ static int blackrorator(int fd, void *pdata)
     /* unlock */
     pthread_mutex_unlock(&g_PthreadMutexMonitor);
 
-    stToupcamRespon.com.size[0] = END_BUFF_SIZE;
+    stToupcamRespon.com.size[0] = COMMON_BUFF_SIZE;
     iRet = send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE, 0);
     if(iRet <= 0)
     {
@@ -157,7 +157,8 @@ static int snapshot(int fd, void *pdata)
             */
 
             memset(pBuffer, 0, TCP_BUFFERSIZE+TOUPCAM_COMMON_RESPON_HEADER_SIZE);
-            stToupcamRespon.com.size[0] = iTotalSize;
+            stToupcamRespon.com.size[0] = COMMON_BUFF_SIZE;
+            stToupcamRespon.com.size[1] = iTotalSize;
             m_memcopy(pBuffer, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE);
             send(fd, pBuffer, TOUPCAM_COMMON_RESPON_HEADER_SIZE, 0);
             

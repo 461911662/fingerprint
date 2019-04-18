@@ -125,9 +125,24 @@ void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx)
                 }
             }
             break;
-        case TOUPCAM_EVENT_EXPOSURE:     /* exposure time changed */
         case TOUPCAM_EVENT_TEMPTINT:     /* white balance changed, Temp/Tint mode */
+            printf("toupcam event TOUPCAM_EVENT_TEMPTINT(%d).\n", nEvent);
+            pthread_mutex_trylock(&g_pstTouPcam->stWhiteBlc.mutex);
+            if(g_pstTouPcam->stWhiteBlc.iauto)
+            {
+                hr = Toupcam_get_TempTint(g_pstTouPcam->m_hcam, &g_pstTouPcam->stWhiteBlc.Temp, &g_pstTouPcam->stWhiteBlc.Tint);
+                if(FAILED(hr))
+                {
+                    printf("init Temp,Tint failed!\n");
+                }
+                printf("White balance Temp:%d, Tint:%d\n", g_pstTouPcam->stWhiteBlc.Temp, g_pstTouPcam->stWhiteBlc.Tint);
+            }
+            pthread_mutex_unlock(&g_pstTouPcam->stWhiteBlc.mutex);
+            break;
         case TOUPCAM_EVENT_WBGAIN:       /* white balance changed, RGB Gain mode */
+            /* not support it yet */
+            break;
+        case TOUPCAM_EVENT_EXPOSURE:     /* exposure time changed */
         case TOUPCAM_EVENT_TRIGGERFAIL:  /* trigger failed */
         case TOUPCAM_EVENT_BLACK:        /* black balance changed */
         case TOUPCAM_EVENT_FFC:          /* flat field correction status changed */
@@ -352,7 +367,43 @@ void pthread_mutex_destroys()
     return;
 }
 
+static int SetupToupcam(void)
+{
+    unsigned int iRet = ERROR_SUCCESS;
+    TOUPCAM_S *pstTouPcam = NULL;
+    iRet = init_Toupcam((void *)g_pstTouPcam);
+    iRet += g_pstTouPcam->OpenDevice();
+    if(ERROR_FAILED == iRet)
+    {
+        return ERROR_FAILED;
+    }
 
+    iRet = g_pstTouPcam->PreInitialDevice((void *)g_pstTouPcam);
+    if(ERROR_FAILED == iRet)
+    {
+        return ERROR_FAILED;
+    }
+
+    iRet = g_pstTouPcam->ConfigDevice((void *)g_pstTouPcam);
+    if(ERROR_FAILED == iRet)
+    {
+        return ERROR_FAILED;
+    }
+
+    iRet = g_pstTouPcam->StartDevice((void *)g_pstTouPcam);
+    if(ERROR_FAILED == iRet)
+    {
+        return ERROR_FAILED;
+    }    
+
+    g_pstTouPcam->CloseDevice((void *)g_pstTouPcam);
+
+    return ERROR_SUCCESS;
+}
+
+/*
+* 主函数main
+*/
 int main(int, char**)
 {
 	int inWidth = 0, inHeight = 0;
@@ -383,8 +434,20 @@ int main(int, char**)
     iRet = pthread_create(&g_PthreadId[0], NULL, pthread_server, (void *)&iPthredArg);
 
 	/* toupcam health's monitor thread */
-    iRet = pthread_create(&g_PthreadId[1], NULL, pthread_health_monitor, (void *)&iPthredArg);
-    
+    iRet += pthread_create(&g_PthreadId[1], NULL, pthread_health_monitor, (void *)&iPthredArg);
+    if(ERROR_FAILED == iRet)
+    {
+        goto exit0_;
+    }
+
+    /* 启动摄像头 */
+    iRet = SetupToupcam();
+    if(ERROR_FAILED == iRet)
+    {
+        goto exit1_;
+    }
+
+#if 0    
     iRet = init_Toupcam();
     if(ERROR_FAILED == iRet)
     {
@@ -398,6 +461,7 @@ int main(int, char**)
     {
         goto exit1_;
     }
+#endif
 
     pthread_mutex_destroys();
 

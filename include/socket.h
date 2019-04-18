@@ -16,8 +16,8 @@
 #define TCP_BUFFER_SIZE  1024
 #define TCP_REQUEST 0x01
 #define TCP_RESPONSE 0x02
-//#define TCP_BUFFERSIZE 1024
-#define TCP_BUFFERSIZE 1023
+#define TCP_BUFFERSIZE 1024
+//#define TCP_BUFFERSIZE 1023
 
 
 struct sockets
