@@ -52,7 +52,7 @@ static int blackrorator(int fd, void *pdata)
 
     if(!g_pstTouPcam->m_hcam)
     {
-        printf("toupcam->m_hcam is invaild.\n");
+        printf("%s: toupcam->m_hcam is invaild.\n", __func__);
         return ERROR_FAILED;
     }
     
@@ -91,7 +91,7 @@ static int blackrorator(int fd, void *pdata)
 
 _exit0:
     stToupcamRespon.cc = ERROR_FAILED;
-    send(fd, &stToupcamRespon, sizeof(TOUPCAM_COMMON_RESPON_S), 0);
+    send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE, 0);
 
     return ERROR_FAILED;
 
@@ -124,7 +124,7 @@ static int snapshot(int fd, void *pdata)
 	
     if(!g_pstTouPcam->m_hcam)
     {
-        printf("toupcam->m_hcam is invaild.\n");
+        printf("%s: toupcam->m_hcam is invaild.\n", __func__);
         return ERROR_FAILED;
     }
     hr = Toupcam_Snap(g_pstTouPcam->m_hcam, 1); /* 抓拍当前2048x2044 */
@@ -202,10 +202,537 @@ static int snapshot(int fd, void *pdata)
 
 _exit0:
     stToupcamRespon.cc = ERROR_FAILED;
-    send(fd, &stToupcamRespon, sizeof(TOUPCAM_COMMON_RESPON_S), 0);
+    send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE, 0);
 
     return ERROR_FAILED;
 }
+
+static int setbrightnesstype(int fd, void *pdata)
+{
+    if(fd < 0 || NULL == pdata)
+    {
+        printf("%s: input param is invaild.\n", __func__);
+        return ERROR_FAILED;
+    }
+
+    HRESULT hr;
+    int iAutotype = 0;
+    TOUPCAM_COMMON_RESPON_S stToupcamRespon;
+    TOUPCAM_COMMON_REQUES_S *pstToupcamReq = (TOUPCAM_COMMON_REQUES_S *)pdata;
+
+    fillresponheader(&stToupcamRespon);
+    stToupcamRespon.com.subcmd = CMD_BRIGHTNESSTYPE;
+    stToupcamRespon.com.size[0] = INVAILD_BUFF_SIZE;
+
+    if(TCP_REQUEST != pstToupcamReq->com.type)
+    {
+        goto _exit0;
+    }
+
+    if(!g_pstTouPcam->m_hcam)
+    {
+        printf("%s: toupcam->m_hcam is invaild.\n", __func__);
+        return ERROR_FAILED;
+    }
+
+    pthread_mutex_lock(&g_pstTouPcam->stTexpo.mutex);
+    if(g_pstTouPcam->stTexpo.bAutoExposure != pstToupcamReq->data.brightnesstype)
+    {
+        g_pstTouPcam->stTexpo.bAutoExposure = pstToupcamReq->data.brightnesstype;
+        /* Toupcam_put_Brightness(g_pstTouPcam->m_hcam, g_pstTouPcam->stTexpo.bAutoExposure); */
+        Toupcam_put_AutoExpoEnable(g_pstTouPcam->m_hcam, g_pstTouPcam->stTexpo.bAutoExposure);
+        Toupcam_get_AutoExpoEnable(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.bAutoExposure);
+        printf("cur expo mode:%s\n", g_pstTouPcam->stTexpo.bAutoExposure?"auto":"manu");
+        if(g_pstTouPcam->stTexpo.bAutoExposure != pstToupcamReq->data.brightnesstype)
+        {
+            pthread_mutex_unlock(&g_pstTouPcam->stTexpo.mutex);
+            goto _exit0;
+        }
+    }
+    else
+    {
+        printf("cur expo mode:%s\n", g_pstTouPcam->stTexpo.bAutoExposure?"auto":"manu");
+    }
+    stToupcamRespon.data.brightness = g_pstTouPcam->stTexpo.bAutoExposure;
+
+    pthread_mutex_unlock(&g_pstTouPcam->stTexpo.mutex);
+
+    stToupcamRespon.com.size[0] = COMMON_BUFF_SIZE+1;
+    send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE+1, 0);
+
+    return ERROR_SUCCESS;
+
+_exit0:
+    stToupcamRespon.cc = ERROR_FAILED;
+    send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE+1, 0);
+
+    return ERROR_FAILED;
+
+}
+
+static int setbrightness(int fd, void *pdata)
+{
+    if(fd < 0 || NULL == pdata)
+    {
+        printf("%s: input param is invaild.\n", __func__);
+        return ERROR_FAILED;
+    }
+
+    HRESULT hr;
+    unsigned short usBrightness = 0;
+    TOUPCAM_COMMON_RESPON_S stToupcamRespon;
+    TOUPCAM_COMMON_REQUES_S *pstToupcamReq = (TOUPCAM_COMMON_REQUES_S *)pdata;
+
+    fillresponheader(&stToupcamRespon);
+    stToupcamRespon.com.subcmd = CMD_BRIGHTNESS;
+    stToupcamRespon.com.size[0] = INVAILD_BUFF_SIZE;
+
+    if(TCP_REQUEST != pstToupcamReq->com.type)
+    {
+        goto _exit0;
+    }
+
+    if(!g_pstTouPcam->m_hcam)
+    {
+        printf("%s: toupcam->m_hcam is invaild.\n", __func__);
+        return ERROR_FAILED;
+    }
+
+    if(!iEndianness)
+    {
+        usBrightness = BIGLITTLESWAP16(pstToupcamReq->data.brightness);
+    }
+    else
+    {
+        usBrightness = pstToupcamReq->data.brightness;
+    }
+
+    if(g_pstTouPcam->stTexpo.AnMin < usBrightness || g_pstTouPcam->stTexpo.AnMax > usBrightness)
+    {
+        printf("more than the range of brightness.\n");
+        goto _exit0;
+    }
+
+    pthread_mutex_lock(&g_pstTouPcam->stTexpo.mutex);
+    if(0x01 == g_pstTouPcam->stTexpo.bAutoExposure)
+    {
+        g_pstTouPcam->stTexpo.AGain = usBrightness;
+        hr = Toupcam_put_ExpoAGain(g_pstTouPcam->m_hcam, g_pstTouPcam->stTexpo.AGain);
+        if (FAILED(hr))
+        {
+            printf("set brightness failly(%lld)!\n", hr);
+            pthread_mutex_unlock(&g_pstTouPcam->stTexpo.mutex);
+            goto _exit0;
+        }
+        hr = Toupcam_get_ExpoAGain(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.AGain);
+        if (FAILED(hr))
+        {
+            printf("set brightness failly(%lld)!\n", hr);
+            pthread_mutex_unlock(&g_pstTouPcam->stTexpo.mutex);
+            goto _exit0;
+        }
+
+        stToupcamRespon.data.brightness = g_pstTouPcam->stTexpo.AGain;
+        stToupcamRespon.com.size[0] = COMMON_BUFF_SIZE+2;
+    }
+    else
+    {
+        printf("not set brightness,because of this is manu mode!!!\n");
+        pthread_mutex_unlock(&g_pstTouPcam->stTexpo.mutex);
+        goto _exit0;
+    }
+    pthread_mutex_unlock(&g_pstTouPcam->stTexpo.mutex);
+
+    send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE+2, 0);
+
+    return ERROR_SUCCESS;    
+
+_exit0:
+    stToupcamRespon.cc = ERROR_FAILED;
+    send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE+2, 0);
+
+    return ERROR_FAILED;
+}
+
+static int setexpotype(int fd, void *pdata)
+{
+    if(fd < 0 || NULL == pdata)
+    {
+        printf("%s: input param is invaild.\n", __func__);
+        return ERROR_FAILED;
+    }
+
+    HRESULT hr;
+    TOUPCAM_COMMON_RESPON_S stToupcamRespon;
+    TOUPCAM_COMMON_REQUES_S *pstToupcamReq = (TOUPCAM_COMMON_REQUES_S *)pdata;
+
+    fillresponheader(&stToupcamRespon);
+    stToupcamRespon.com.subcmd = CMD_EXPOTYPE;
+    stToupcamRespon.com.size[0] = INVAILD_BUFF_SIZE;
+
+    if(TCP_REQUEST != pstToupcamReq->com.type)
+    {
+        goto _exit0;
+    }
+
+    if(!g_pstTouPcam->m_hcam)
+    {
+        printf("%s: toupcam->m_hcam is invaild.\n", __func__);
+        return ERROR_FAILED;
+    }
+    
+    pthread_mutex_lock(&g_pstTouPcam->stTexpo.mutex);
+    if(g_pstTouPcam->stTexpo.bAutoExposure != pstToupcamReq->data.expotype)
+    {
+        g_pstTouPcam->stTexpo.bAutoExposure = pstToupcamReq->data.brightnesstype;
+        Toupcam_put_AutoExpoEnable(g_pstTouPcam->m_hcam, g_pstTouPcam->stTexpo.bAutoExposure);
+        Toupcam_get_AutoExpoEnable(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.bAutoExposure);
+        printf("cur expo mode:%s\n", g_pstTouPcam->stTexpo.bAutoExposure?"auto":"manu");
+        if(g_pstTouPcam->stTexpo.bAutoExposure != pstToupcamReq->data.brightnesstype)
+        {
+            pthread_mutex_unlock(&g_pstTouPcam->stTexpo.mutex);
+            goto _exit0;
+        }
+    }
+    else
+    {
+        printf("cur expo mode:%s\n", g_pstTouPcam->stTexpo.bAutoExposure?"auto":"manu");
+    }
+    stToupcamRespon.data.expotype = g_pstTouPcam->stTexpo.bAutoExposure;
+    pthread_mutex_unlock(&g_pstTouPcam->stTexpo.mutex);
+
+    stToupcamRespon.com.size[0] = COMMON_BUFF_SIZE+1;
+    send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE+1, 0);
+    return ERROR_SUCCESS;   
+
+_exit0:
+    stToupcamRespon.cc = ERROR_FAILED;
+    send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE+1, 0);
+
+    return ERROR_FAILED;
+}
+
+static int setexpo(int fd, void *pdata)
+{
+    if(fd < 0 || NULL == pdata)
+    {
+        printf("%s: input param is invaild.\n", __func__);
+        return ERROR_FAILED;
+    }
+
+    HRESULT hr;
+    unsigned short usExpo = 0;
+    TOUPCAM_COMMON_RESPON_S stToupcamRespon;
+    TOUPCAM_COMMON_REQUES_S *pstToupcamReq = (TOUPCAM_COMMON_REQUES_S *)pdata;
+
+    fillresponheader(&stToupcamRespon);
+    stToupcamRespon.com.subcmd = CMD_EXPO;
+    stToupcamRespon.com.size[0] = INVAILD_BUFF_SIZE;
+
+    if(TCP_REQUEST != pstToupcamReq->com.type)
+    {
+        goto _exit0;
+    }
+
+    if(!g_pstTouPcam->m_hcam)
+    {
+        printf("%s: toupcam->m_hcam is invaild.\n", __func__);
+        return ERROR_FAILED;
+    }
+
+    if(!iEndianness)
+    {
+        usExpo = BIGLITTLESWAP16(pstToupcamReq->data.expo);
+    }
+    else
+    {
+        usExpo = pstToupcamReq->data.expo;
+    }
+
+    pthread_mutex_lock(&g_pstTouPcam->stTexpo.mutex);
+    if(!g_pstTouPcam->stTexpo.bAutoExposure)
+    {        
+        hr = Toupcam_put_AutoExpoTarget(g_pstTouPcam->m_hcam, usExpo);
+        if (FAILED(hr))
+        {
+            printf("set brightness failly(%lld)!\n", hr);
+            pthread_mutex_unlock(&g_pstTouPcam->stTexpo.mutex);
+            goto _exit0;
+        }
+        hr = Toupcam_get_AutoExpoTarget(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.AutoTarget);
+        if (FAILED(hr))
+        {
+            printf("get brightness failly(%lld)!\n", hr);
+            pthread_mutex_unlock(&g_pstTouPcam->stTexpo.mutex);
+            goto _exit0;
+        }
+        
+        stToupcamRespon.data.expo = g_pstTouPcam->stTexpo.AutoTarget;
+        stToupcamRespon.com.size[0] = COMMON_BUFF_SIZE + 2;
+    }
+    else
+    {
+        printf("not set expo,because of this is manu mode!!!\n");
+        pthread_mutex_unlock(&g_pstTouPcam->stTexpo.mutex);
+        goto _exit0;
+    }
+
+    pthread_mutex_unlock(&g_pstTouPcam->stTexpo.mutex);
+
+    send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE+2, 0);
+
+    return ERROR_SUCCESS;    
+
+
+_exit0:
+    stToupcamRespon.cc = ERROR_FAILED;
+    send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE+2, 0);
+
+    return ERROR_FAILED;    
+}
+
+static int setcontrasttype(int fd, void *pdata)
+{
+    if(fd < 0 || NULL == pdata)
+    {
+        printf("%s: input param is invaild.\n", __func__);
+        return ERROR_FAILED;
+    }
+
+    HRESULT hr;
+    unsigned short usExpo = 0;
+    TOUPCAM_COMMON_RESPON_S stToupcamRespon;
+    TOUPCAM_COMMON_REQUES_S *pstToupcamReq = (TOUPCAM_COMMON_REQUES_S *)pdata;
+
+    fillresponheader(&stToupcamRespon);
+    stToupcamRespon.com.subcmd = CMD_CONTRASTTYPE;
+    stToupcamRespon.com.size[0] = INVAILD_BUFF_SIZE;
+
+    if(TCP_REQUEST != pstToupcamReq->com.type)
+    {
+        goto _exit0;
+    }
+
+    if(!g_pstTouPcam->m_hcam)
+    {
+        printf("%s: toupcam->m_hcam is invaild.\n", __func__);
+        return ERROR_FAILED;
+    }
+
+    pthread_mutex_lock(&g_pstTouPcam->stTcolor.mutex);
+    if(!g_pstTouPcam->stTcolor.bAutoColor)
+    {
+        g_pstTouPcam->stTcolor.bAutoColor = pstToupcamReq->data.contrasttype;
+        printf("cur contrast mode:%s\n", g_pstTouPcam->stTcolor.bAutoColor?"auto":"manu");
+    }
+    else
+    {
+        printf("cur contrast mode:%s\n", g_pstTouPcam->stTcolor.bAutoColor?"auto":"manu");
+    }
+    stToupcamRespon.data.contrasttype = g_pstTouPcam->stTcolor.bAutoColor;
+    pthread_mutex_unlock(&g_pstTouPcam->stTcolor.mutex);
+
+    stToupcamRespon.com.size[0] = COMMON_BUFF_SIZE+1;
+    send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE+1, 0);
+    
+    return ERROR_SUCCESS;
+
+_exit0:
+    stToupcamRespon.cc = ERROR_FAILED;
+    send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE+1, 0);
+
+    return ERROR_FAILED;     
+}
+
+static int setcontrast(int fd, void *pdata)
+{
+    if(fd < 0 || NULL == pdata)
+    {
+        printf("%s: input param is invaild.\n", __func__);
+        return ERROR_FAILED;
+    }
+
+    HRESULT hr;
+    int iContrast;
+    TOUPCAM_COMMON_RESPON_S stToupcamRespon;
+    TOUPCAM_COMMON_REQUES_S *pstToupcamReq = (TOUPCAM_COMMON_REQUES_S *)pdata;
+
+    fillresponheader(&stToupcamRespon);
+    stToupcamRespon.com.subcmd = CMD_CONTRAST;
+    stToupcamRespon.com.size[0] = INVAILD_BUFF_SIZE;
+
+    if(TCP_REQUEST != pstToupcamReq->com.type)
+    {
+        goto _exit0;
+    }
+
+    if(!g_pstTouPcam->m_hcam)
+    {
+        printf("%s: toupcam->m_hcam is invaild.\n", __func__);
+        return ERROR_FAILED;
+    }
+
+    if(!iEndianness)
+    {
+        iContrast = BIGLITTLESWAP32(pstToupcamReq->data.contrast);
+    }
+    else
+    {
+        iContrast = pstToupcamReq->data.contrast;
+    }    
+    
+    pthread_mutex_lock(&g_pstTouPcam->stTcolor.mutex);
+    if(!g_pstTouPcam->stTcolor.bAutoColor)
+    {
+        hr = Toupcam_put_Contrast(g_pstTouPcam->m_hcam, iContrast);
+        if (FAILED(hr))
+        {
+            printf("set contrast failly(%lld)!\n", hr);
+            pthread_mutex_unlock(&g_pstTouPcam->stTcolor.mutex);
+            goto _exit0;
+        }
+        hr = Toupcam_get_Contrast(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTcolor.Contrast);
+        if (FAILED(hr))
+        {
+            printf("get contrast failly(%lld)!\n", hr);
+            pthread_mutex_unlock(&g_pstTouPcam->stTcolor.mutex);
+            goto _exit0;
+        }
+        
+        stToupcamRespon.data.contrast = g_pstTouPcam->stTcolor.Contrast;
+        stToupcamRespon.com.size[0] = COMMON_BUFF_SIZE + 4;
+    }
+    else
+    {
+        printf("not set contrast,because of this is manu mode!!!\n");
+        pthread_mutex_unlock(&g_pstTouPcam->stTcolor.mutex);
+        goto _exit0;
+    }
+
+    pthread_mutex_unlock(&g_pstTouPcam->stTcolor.mutex);
+    
+    send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE+4, 0);
+    return ERROR_SUCCESS;
+
+_exit0:
+    stToupcamRespon.cc = ERROR_FAILED;
+    send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE+4, 0);
+
+    return ERROR_FAILED;      
+}
+
+static int setzoneexpo(int fd, void *pdata)
+{
+    if(fd < 0 || NULL == pdata)
+    {
+        printf("%s: input param is invaild.\n", __func__);
+        return ERROR_FAILED;
+    }
+
+    HRESULT hr;
+    RECT stExpoRect;
+    TOUPCAM_COMMON_RESPON_S stToupcamRespon;
+    TOUPCAM_COMMON_REQUES_S *pstToupcamReq = (TOUPCAM_COMMON_REQUES_S *)pdata;
+
+    fillresponheader(&stToupcamRespon);
+    stToupcamRespon.com.subcmd = CMD_ZONEEXPO;
+    stToupcamRespon.com.size[0] = INVAILD_BUFF_SIZE;
+
+    if(TCP_REQUEST != pstToupcamReq->com.type)
+    {
+        goto _exit0;
+    }
+
+    if(!g_pstTouPcam->m_hcam)
+    {
+        printf("%s: toupcam->m_hcam is invaild.\n", __func__);
+        return ERROR_FAILED;
+    }
+
+    if(!iEndianness)
+    {
+        stExpoRect.left = BIGLITTLESWAP32(pstToupcamReq->data.expozone.left);
+        stExpoRect.bottom = BIGLITTLESWAP32(pstToupcamReq->data.expozone.bottom);
+        stExpoRect.right = BIGLITTLESWAP32(pstToupcamReq->data.expozone.right);
+        stExpoRect.top = BIGLITTLESWAP32(pstToupcamReq->data.expozone.top);
+    }
+    else
+    {
+        stExpoRect.left = pstToupcamReq->data.expozone.left;
+        stExpoRect.bottom = pstToupcamReq->data.expozone.bottom;
+        stExpoRect.right = pstToupcamReq->data.expozone.right;
+        stExpoRect.top = pstToupcamReq->data.expozone.top;
+    }
+    
+    if(g_pstTouPcam->stTexpo.bAutoExposure)
+    {
+        hr = Toupcam_put_AEAuxRect(g_pstTouPcam->m_hcam, &stExpoRect);
+        if (FAILED(hr))
+        {
+            printf("set expo zone failly(%lld)!\n", hr);
+            goto _exit0;
+        }
+        hr = Toupcam_get_AEAuxRect(g_pstTouPcam->m_hcam, &stExpoRect);
+        if (FAILED(hr))
+        {
+            printf("get expo zone failly(%lld)!\n", hr);
+            goto _exit0;
+        }
+    }
+    else
+    {
+        printf("not set zone expo,because of this is manu mode!!!\n");
+        goto _exit0;
+    }
+
+    stToupcamRespon.com.size[0] = COMMON_BUFF_SIZE + sizeof(RECT);
+    
+    send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE+sizeof(RECT), 0);
+
+    return ERROR_SUCCESS;
+    
+_exit0:
+    stToupcamRespon.cc = ERROR_FAILED;
+    send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE+sizeof(RECT), 0);
+
+    return ERROR_FAILED;      
+}
+
+static int sethistogramtype(int fd, void *pdata)
+{
+    if(fd < 0 || NULL == pdata)
+    {
+        printf("%s: input param is invaild.\n", __func__);
+        return ERROR_FAILED;
+    }
+
+    HRESULT hr;
+    EXPO_RECT_S stExpoRect;
+    TOUPCAM_COMMON_RESPON_S stToupcamRespon;
+    TOUPCAM_COMMON_REQUES_S *pstToupcamReq = (TOUPCAM_COMMON_REQUES_S *)pdata;
+
+    fillresponheader(&stToupcamRespon);
+    stToupcamRespon.com.subcmd = CMD_HISTOGRAMTYPE;
+    stToupcamRespon.com.size[0] = INVAILD_BUFF_SIZE;
+
+    if(TCP_REQUEST != pstToupcamReq->com.type)
+    {
+        goto _exit0;
+    }
+
+    if(!g_pstTouPcam->m_hcam)
+    {
+        printf("%s: toupcam->m_hcam is invaild.\n", __func__);
+        return ERROR_FAILED;
+    }
+
+_exit0:
+    stToupcamRespon.cc = ERROR_FAILED;
+    send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE+sizeof(EXPO_RECT_S), 0);
+
+    return ERROR_FAILED;  
+}
+
 
 int common_toupcam_cmd(int fd, void *pdata, unsigned short usSize)
 {
@@ -233,23 +760,22 @@ int common_toupcam_cmd(int fd, void *pdata, unsigned short usSize)
         case CMD_BLACKRORATOR:
             return blackrorator(fd, pdata);
         case CMD_ZONEEXPO:
-            break;
+            return setzoneexpo(fd, pdata);
         case CMD_BRIGHTNESSTYPE:
-            break;
+            return setbrightnesstype(fd, pdata);
         case CMD_BRIGHTNESS:
-            break;
+            return setbrightness(fd, pdata);
         case CMD_EXPOTYPE:
-            break;
+            return setexpotype(fd, pdata);
         case CMD_EXPO:
-            break;
+            return setexpo(fd, pdata);
         case CMD_CONTRASTTYPE:
-            break;
+            return setcontrasttype(fd, pdata);
         case CMD_CONTRAST:
-            break;
+            return setcontrast(fd, pdata);
         case CMD_HISTOGRAMTYPE:
-            break;
+            return sethistogramtype(fd, pdata);
         case CMD_HISTOGRAM:
-            break;
         default:
             return NOTSUPPORT;
     }

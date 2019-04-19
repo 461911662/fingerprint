@@ -23,6 +23,7 @@ static int setudpaddr(int fd, void *pdata)
     TOUPCAM_COMMON_REQUES_S *pstToupcamReq = (TOUPCAM_COMMON_REQUES_S *)pdata;
 
     fillresponheader(&stToupcamRespon);
+    stToupcamRespon.com.cmd = COMCMD_WIFICFG;
     stToupcamRespon.com.subcmd = CMD_SETUDPADDR;
     stToupcamRespon.com.size[0] = INVAILD_BUFF_SIZE;
 

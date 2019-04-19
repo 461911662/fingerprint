@@ -548,9 +548,9 @@ static unsigned int SetAutoExpo_Toupcam()
 
     /*初始化自动曝光锁*/
     pthread_mutex_init(&g_pstTouPcam->stTexpo.mutex, NULL);
-    Toupcam_get_AutoExpoEnable(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.bAutoExposure);
-
+    
     pthread_mutex_lock(&g_pstTouPcam->stTexpo.mutex);
+    Toupcam_get_AutoExpoEnable(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.bAutoExposure);
     if(!g_pstTouPcam->stTexpo.bAutoExposure)
     {
         g_pstTouPcam->stTexpo.bAutoExposure = 1;
@@ -568,9 +568,17 @@ static unsigned int SetAutoExpo_Toupcam()
 
     /*Toupcam_put_MaxAutoExpoTimeAGain();*/
     Toupcam_get_MaxAutoExpoTimeAGain(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.AutoMaxTime, &g_pstTouPcam->stTexpo.AutoMaxAGain);
+    Toupcam_get_RealExpoTime(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.Time);
+    Toupcam_get_ExpTimeRange(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.nMin, &g_pstTouPcam->stTexpo.nMax, &g_pstTouPcam->stTexpo.nDef);
+    Toupcam_get_ExpoAGainRange(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.AnMin, &g_pstTouPcam->stTexpo.AnMax, &g_pstTouPcam->stTexpo.AnDef);
+    g_pstTouPcam->stTexpo.scale = 9.375;
     pthread_mutex_unlock(&g_pstTouPcam->stTexpo.mutex);
 
-    printf("cur max expo time:%u, max agin time:%u.\n", g_pstTouPcam->stTexpo.AutoMaxTime, g_pstTouPcam->stTexpo.AutoMaxAGain);
+    printf("expo param:\n");
+    printf("cur expo real time:%u.\n", g_pstTouPcam->stTexpo.Time);
+    printf("cur max expo time Min:%u,Max:%u,Def:%u.\n", g_pstTouPcam->stTexpo.nMin, g_pstTouPcam->stTexpo.nMax, g_pstTouPcam->stTexpo.nDef);
+    printf("cur max expo Value AMin:%u,AMax:%u,ADef:%u.\n", g_pstTouPcam->stTexpo.AnMin, g_pstTouPcam->stTexpo.AnMax, g_pstTouPcam->stTexpo.AnDef);
+    printf("cur max expo time:%u, max AGain time:%us.\n", g_pstTouPcam->stTexpo.AutoMaxTime, g_pstTouPcam->stTexpo.AutoMaxAGain);
     
     return ERROR_SUCCESS;
 }
@@ -726,7 +734,9 @@ int fillresponheader(TOUPCAM_COMMON_RESPON_S *respon)
     respon->com.size[0] = INVAILD_BUFF_SIZE;
     respon->com.size[1] = 0;
     respon->cc = ERROR_SUCCESS;
-    respon->pdata = NULL;
+    memset(respon->data.reserve, 0, ARRAY_SIZE(respon->data.reserve));
+
+    return ERROR_SUCCESS;
 }
 
 

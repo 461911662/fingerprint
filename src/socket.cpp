@@ -32,7 +32,7 @@ void common_hander(int fd, void *pBuff, unsigned int uiSize)
             printf("request(%d): cmd:%02x,subcmd:%04x,", fd, pstToupcamReq->com.cmd, pstToupcamReq->com.subcmd);
             for(j=0; j<uiSize-4; j++)
             {
-                printf("%02x,", pstToupcamReq->data.resever[j]);
+                printf("%02x,", pstToupcamReq->data.reserve[j]);
             }
             printf("cc: %d\n", iRet);
        }

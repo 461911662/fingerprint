@@ -36,6 +36,7 @@ enum TOUPCAM_CC_CODE_E{
     ERROR_FAILED,
     ERROR_WIFI_ADDR_EXIST = 2,
     ERROR_WIFI_ADDR_HOLD = 3,
+    ERROR_TBRIGHTNESS_MANU = 4,
     NOTSUPPORT=255,
 };
 
@@ -54,11 +55,27 @@ typedef struct Toupcam_common_header
     unsigned short subcmd;
 }__attribute__((packed))TOUPCAM_COMMON_HEADER_S;
 
+typedef struct{                
+    int left;
+    int top;
+    int right;
+    int bottom;
+}__attribute__((packed))EXPO_RECT_S;
+
 typedef struct Toupcam_common_respon
 {
     TOUPCAM_COMMON_HEADER_S com;
     char cc;
-    char *pdata;
+    union Data{
+        unsigned char brightnesstype;
+        unsigned short brightness;
+        unsigned char expotype;
+        unsigned short expo;
+        unsigned char contrasttype;
+        unsigned int contrast;
+        EXPO_RECT_S expozone;
+        char reserve[2048];
+    }data;
 }__attribute__((packed))TOUPCAM_COMMON_RESPON_S;
 
 typedef struct Toupcam_common_reques
@@ -67,7 +84,14 @@ typedef struct Toupcam_common_reques
     union Data {
         unsigned int ipv4;
         unsigned long long ipv6;
-        char resever[REQUES_SIZE];
+        unsigned char brightnesstype;   /* 0x00:手动   0x01:自动   */
+        unsigned short brightness;                 /* 亮度值 */
+        unsigned char expotype;        /* 0x00:手动   0x01:自动 */
+        unsigned short expo;                       /* 曝光值 */
+        unsigned char contrasttype;    /* 0x00:手动 0x01:自动     */
+        EXPO_RECT_S expozone;            /* 区域曝光参数 */
+        int contrast;                              /* 对比度 */
+        char reserve[REQUES_SIZE];
     }data;
 }__attribute__((packed))TOUPCAM_COMMON_REQUES_S;
 
@@ -84,14 +108,16 @@ typedef struct Texpo
     unsigned nMax;                  /* 曝光的最大时间 */
     unsigned nDef;                  /* 曝光的默认时间 */
     unsigned short AGain;           /* 模拟增益，百分比，如200表示增益200% */
-    unsigned short AnMin;           /* 模拟增益的最小时间 */
-    unsigned short AnMax;           /* 模拟增益的最大时间 */
-    unsigned short AnDef;           /* 模拟增益的默认时间 */
+    unsigned short AnMin;           /* 模拟增益的最小值 */
+    unsigned short AnMax;           /* 模拟增益的最大值 */
+    unsigned short AnDef;           /* 模拟增益的默认值 */
+    float scale;                    /* 最小刻度值 */
     pthread_mutex_t mutex;          /* 保护曝光AutoTarget,亮度AGain */   
 }TEXPO_S;
 
 typedef struct Tcolor
 {
+    int bAutoColor;              /* 设置自动调色，True        or False */
     int Hue;                        /* 色度 */
     int Saturation;                 /* 饱和度 */
     int Brightness;                 /* 亮度 */
