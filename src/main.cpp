@@ -167,6 +167,95 @@ void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx)
     }
 }
 
+void *pthread_link_task1(void *argv)
+{
+    if(NULL == argv)
+    {
+        return NULL;
+    }
+
+    HRESULT hr;
+    int fd = *(int *)argv;
+    int pCtx = 0;
+    int pHistoramCtx = 0;
+    TOUPCAM_COMMON_RESPON_S stToupcamRespon;
+    stToupcamRespon.com.cmd = COMCMD_TOUPCAMCFG;
+    sprintf(stToupcamRespon.com.proto, "%s", "proto");
+    stToupcamRespon.com.proto[4] = 'o';
+    stToupcamRespon.com.type = TCP_RESPONSE;
+    stToupcamRespon.com.size[0] = INVAILD_BUFF_SIZE;
+    stToupcamRespon.com.size[1] = 0;
+    stToupcamRespon.cc = ERROR_SUCCESS;
+    memset(stToupcamRespon.data.reserve, 0, ARRAY_SIZE(stToupcamRespon.data.reserve));
+
+    stToupcamRespon.com.type = TCP_DIRECTTSM;
+    stToupcamRespon.com.cmd = CMD_DATATSM;
+
+    char *pcdes = (char *)malloc(sizeof(g_pstTouPcam->stHistoram.aHistY)*4+TOUPCAM_COMMON_RESPON_HEADER_SIZE);
+    char *pcfinger = NULL;
+    if(NULL == pcdes)
+    {
+        perror("pthread_link_task1");
+        return NULL;
+    }
+
+    while(1)
+    {
+        if(g_pstTouPcam->m_hcam)
+        {
+            continue;
+        }
+        pcfinger = pcdes;
+    
+        memset(pcfinger, 0, sizeof(g_pstTouPcam->stHistoram.aHistY)*4);
+        PITOUPCAM_HISTOGRAM_CALLBACK pcallback = void (g_pstTouPcam->stHistoram.aHistY, g_pstTouPcam->stHistoram.aHistR, g_pstTouPcam->stHistoram.aHistG, g_pstTouPcam->stHistoram.aHistB, (void*)&pCtx);
+        pthread_mutex_lock(&g_PthreadMutexMonitor);
+        hr = Toupcam_GetHistogram(g_pstTouPcam->m_hcam, pcallback, (void*)&pHistoramCtx);
+        if(FAILED(hr))
+        {
+            pthread_mutex_unlock(&g_PthreadMutexMonitor);
+            continue;
+        }
+        pthread_mutex_unlock(&g_PthreadMutexMonitor);
+
+        stToupcamRespon.com.size = ARRAY_SIZE(g_pstTouPcam->stHistoram.aHistY)*4;
+        stToupcamRespon.cc = ERROR_SUCCESS;
+
+        memcpy(pcfinger, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE);
+        pcfinger+=TOUPCAM_COMMON_RESPON_HEADER_SIZE;
+        memcpy(pcfinger, g_pstTouPcam->stHistoram.aHistY, sizeof(g_pstTouPcam->stHistoram.aHistY)); 
+        pcfinger+=sizeof(g_pstTouPcam->stHistoram.aHistY);
+        memcpy(pcfinger, g_pstTouPcam->stHistoram.aHistY, sizeof(g_pstTouPcam->stHistoram.aHistY)); 
+        pcfinger+=sizeof(g_pstTouPcam->stHistoram.aHistY);
+        memcpy(pcfinger, g_pstTouPcam->stHistoram.aHistY, sizeof(g_pstTouPcam->stHistoram.aHistY)); 
+        pcfinger+=sizeof(g_pstTouPcam->stHistoram.aHistY);
+        memcpy(pcfinger, g_pstTouPcam->stHistoram.aHistY, sizeof(g_pstTouPcam->stHistoram.aHistY)); 
+        
+        usleep(5000);
+        if(fd < 0)
+        {
+            break;
+        }
+        
+        send(fd, pcdes, g_pstTouPcam->stHistoram.aHistY)*4+TOUPCAM_COMMON_RESPON_HEADER_SIZE, 0);
+        
+    }
+}
+
+void link_task(int fd)
+{
+    int ifd = fd;
+
+    pthread_t  pt;
+
+    /* create link task */
+    pthread_create(&pt, NULL, pthread_link_task1, (void *)&ifd);
+
+    pthread_join(pt, NULL);
+
+    return ;
+}
+
 void *pthread_server(void *pdata)
 {
     int iClientFd, iServerFd, iRet, i;
@@ -220,6 +309,7 @@ void *pthread_server(void *pdata)
 					}
 					FD_SET(iClientFd, &rdfs);
 					printf("tcp(%d) listen(%d)...\n", i, iClientFd);
+                    link_task(i);
 				}
 				else
 				{
@@ -261,8 +351,6 @@ void *pthread_server(void *pdata)
                         FD_CLR(i, &rdfs);
                         close(i);
                     }
-					/* close */
-                    FD_CLR(i, &tmprdfs);
 				}
 			}
 		}
@@ -272,8 +360,7 @@ void *pthread_server(void *pdata)
 }
 
 void *pthread_health_monitor(void *pdata)
-{
-	
+{   
 	return NULL;
 }
 

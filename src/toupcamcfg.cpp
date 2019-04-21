@@ -520,15 +520,11 @@ static int setcontrasttype(int fd, void *pdata)
     }
 
     pthread_mutex_lock(&g_pstTouPcam->stTcolor.mutex);
-    if(!g_pstTouPcam->stTcolor.bAutoColor)
+    if(g_pstTouPcam->stTcolor.bAutoColor != pstToupcamReq->data.contrasttype)
     {
         g_pstTouPcam->stTcolor.bAutoColor = pstToupcamReq->data.contrasttype;
-        printf("cur contrast mode:%s\n", g_pstTouPcam->stTcolor.bAutoColor?"auto":"manu");
     }
-    else
-    {
-        printf("cur contrast mode:%s\n", g_pstTouPcam->stTcolor.bAutoColor?"auto":"manu");
-    }
+    printf("cur contrast mode:%s\n", g_pstTouPcam->stTcolor.bAutoColor?"auto":"manu");
     stToupcamRespon.data.contrasttype = g_pstTouPcam->stTcolor.bAutoColor;
     pthread_mutex_unlock(&g_pstTouPcam->stTcolor.mutex);
 
@@ -598,7 +594,7 @@ static int setcontrast(int fd, void *pdata)
             pthread_mutex_unlock(&g_pstTouPcam->stTcolor.mutex);
             goto _exit0;
         }
-        
+
         stToupcamRespon.data.contrast = g_pstTouPcam->stTcolor.Contrast;
         stToupcamRespon.com.size[0] = COMMON_BUFF_SIZE + 4;
     }
@@ -664,7 +660,7 @@ static int setzoneexpo(int fd, void *pdata)
         stExpoRect.top = pstToupcamReq->data.expozone.top;
     }
     
-    if(g_pstTouPcam->stTexpo.bAutoExposure)
+    if(!g_pstTouPcam->stTexpo.bAutoExposure)
     {
         hr = Toupcam_put_AEAuxRect(g_pstTouPcam->m_hcam, &stExpoRect);
         if (FAILED(hr))
@@ -678,6 +674,7 @@ static int setzoneexpo(int fd, void *pdata)
             printf("get expo zone failly(%lld)!\n", hr);
             goto _exit0;
         }
+        stToupcamRespon.data.expozone = stExpoRect;
     }
     else
     {
@@ -685,7 +682,7 @@ static int setzoneexpo(int fd, void *pdata)
         goto _exit0;
     }
 
-    stToupcamRespon.com.size[0] = COMMON_BUFF_SIZE + sizeof(RECT);
+    stToupcamRespon.com.size[0] = COMMON_BUFF_SIZE + sizeof(EXPO_RECT_S);
     
     send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE+sizeof(RECT), 0);
 
@@ -726,6 +723,29 @@ static int sethistogramtype(int fd, void *pdata)
         return ERROR_FAILED;
     }
 
+    pthread_mutex_lock(&g_pstTouPcam->stHistoram.mutex);
+    if(g_pstTouPcam->stHistoram.bAutoHis != pstToupcamReq->data.historamtype)
+    {
+        hr = Toupcam_LevelRangeAuto(g_pstTouPcam->m_hcam);
+        if(FAILED(hr))
+        {
+            goto _exit0;
+        }
+        g_pstTouPcam->stHistoram.bAutoHis = pstToupcamReq->data.historamtype;
+        printf("cur contrast mode:%s\n", g_pstTouPcam->stHistoram.bAutoHis?"auto":"manu");
+    }
+    else
+    {
+        printf("cur contrast mode:%s\n", g_pstTouPcam->stHistoram.bAutoHis?"auto":"manu");
+    }
+    pthread_mutex_unlock(&g_pstTouPcam->stHistoram.mutex);
+    
+    stToupcamRespon.com.size[0] = COMMON_BUFF_SIZE+1;
+    stToupcamRespon.data.historamtype = g_pstTouPcam->stHistoram.bAutoHis;
+    send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE+1, 0);
+
+    return ERROR_SUCCESS;    
+
 _exit0:
     stToupcamRespon.cc = ERROR_FAILED;
     send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE+sizeof(EXPO_RECT_S), 0);
@@ -733,6 +753,147 @@ _exit0:
     return ERROR_FAILED;  
 }
 
+static int sethistogram(int fd, void *pdata)
+{
+    if(fd < 0 || NULL == pdata)
+    {
+        printf("%s: input param is invaild.\n", __func__);
+        return ERROR_FAILED;
+    }
+
+    HRESULT hr;
+    int i;
+    HISTORAM_DATA_S stHistoram;
+    TOUPCAM_COMMON_RESPON_S stToupcamRespon;
+    TOUPCAM_COMMON_REQUES_S *pstToupcamReq = (TOUPCAM_COMMON_REQUES_S *)pdata;
+
+    fillresponheader(&stToupcamRespon);
+    stToupcamRespon.com.subcmd = CMD_HISTOGRAM;
+    stToupcamRespon.com.size[0] = INVAILD_BUFF_SIZE;
+
+    if(TCP_REQUEST != pstToupcamReq->com.type)
+    {
+        goto _exit0;
+    }
+
+    if(!g_pstTouPcam->m_hcam)
+    {
+        printf("%s: toupcam->m_hcam is invaild.\n", __func__);
+        return ERROR_FAILED;
+    }
+
+    /* big endianness swap */
+    for(i=0; i<4; i++)
+    {
+        if(!iEndianness)
+        {
+            stHistoram.aLow[i] = BIGLITTLESWAP16(pstToupcamReq->data.historam.aLow[i]);
+        }
+        else
+        {
+            stHistoram.aLow[i] = pstToupcamReq->data.historam.aLow[i];
+        }
+    }    
+
+    pthread_mutex_lock(&g_pstTouPcam->stHistoram.mutex);
+    if(!g_pstTouPcam->stHistoram.bAutoHis)
+    {
+        for(i=0; i<4; i++)
+        {
+            if(stHistoram.aLow[i] != g_pstTouPcam->stHistoram.aLow[i] || stHistoram.aHigh[i] != g_pstTouPcam->stHistoram.aHigh[i])
+            {
+                hr = Toupcam_put_LevelRange(g_pstTouPcam->m_hcam, stHistoram.aLow, stHistoram.aHigh);
+                if(FAILED(hr))
+                {
+                    goto _exit0;
+                }
+                hr = Toupcam_get_LevelRange(g_pstTouPcam->m_hcam, g_pstTouPcam->stHistoram.aLow, g_pstTouPcam->stHistoram.aHigh);
+                if(FAILED(hr))
+                {
+                    goto _exit0;
+                }
+                memcpy(stToupcamRespon.data.historam.aLow, g_pstTouPcam->stHistoram.aLow, 8);
+                memcpy(stToupcamRespon.data.historam.aHigh, g_pstTouPcam->stHistoram.aHigh, 8);
+                stToupcamRespon.com.size[0] = COMMON_BUFF_SIZE + 8;
+                break;
+            }
+        }    
+        if(4 == i)
+        {
+            printf("no need to set it.\n");
+            goto _exit0;
+        }
+    }
+    else
+    {
+        printf("not set histogram,because of this is manu mode!!!\n");
+        goto _exit0;
+    }
+    pthread_mutex_unlock(&g_pstTouPcam->stHistoram.mutex);
+
+    send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE+8, 0);
+    return ERROR_SUCCESS;
+
+_exit0:
+    stToupcamRespon.cc = ERROR_FAILED;
+    send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE+8, 0);
+
+    return ERROR_FAILED; 
+
+}
+
+static int syncserverdata(int fd, void *pdata)
+{
+    if(fd < 0 || NULL == pdata)
+    {
+        printf("%s: input param is invaild.\n", __func__);
+        return ERROR_FAILED;
+    }
+
+    HRESULT hr;
+    int i;
+    HISTORAM_DATA_S stHistoram;
+    TOUPCAM_COMMON_RESPON_S stToupcamRespon;
+    TOUPCAM_COMMON_REQUES_S *pstToupcamReq = (TOUPCAM_COMMON_REQUES_S *)pdata;
+
+    fillresponheader(&stToupcamRespon);
+    stToupcamRespon.com.subcmd = CMD_HISTOGRAM;
+    stToupcamRespon.com.size[0] = INVAILD_BUFF_SIZE;
+
+    if(TCP_REQUEST != pstToupcamReq->com.type)
+    {
+        goto _exit0;
+    }
+
+    if(!g_pstTouPcam->m_hcam)
+    {
+        printf("%s: toupcam->m_hcam is invaild.\n", __func__);
+        return ERROR_FAILED;
+    }
+
+    /* init server data to repson */
+    stToupcamRespon.data.totaldata.brightnesstype = g_pstTouPcam->stTexpo.bAutoExposure;
+    stToupcamRespon.data.totaldata.brightness = g_pstTouPcam->stTexpo.AGain;
+    stToupcamRespon.data.totaldata.expotype = g_pstTouPcam->stTexpo.bAutoExposure;
+    stToupcamRespon.data.totaldata.expo = g_pstTouPcam->stTexpo.AutoTarget;
+    stToupcamRespon.data.totaldata.contrasttype = g_pstTouPcam->stTcolor.bAutoColor;
+    stToupcamRespon.data.totaldata.contrast = g_pstTouPcam->stTcolor.Contrast;
+    stToupcamRespon.data.totaldata.historamtype = g_pstTouPcam->stHistoram.bAutoHis;
+    for(i=0; i<4; i++)
+    {
+        stToupcamRespon.data.totaldata.historam.aHigh[i] = g_pstTouPcam->stHistoram.aHigh[i];
+        stToupcamRespon.data.totaldata.historam.aLow[i] = g_pstTouPcam->stHistoram.aLow[i];
+    }
+      
+    send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE+sizeof(TOTAL_DATA_S), 0);
+    return ERROR_SUCCESS;
+    
+_exit0:
+    stToupcamRespon.cc = ERROR_FAILED;
+    send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE+sizeof(TOTAL_DATA_S), 0);
+
+    return ERROR_FAILED;     
+}
 
 int common_toupcam_cmd(int fd, void *pdata, unsigned short usSize)
 {
@@ -776,6 +937,9 @@ int common_toupcam_cmd(int fd, void *pdata, unsigned short usSize)
         case CMD_HISTOGRAMTYPE:
             return sethistogramtype(fd, pdata);
         case CMD_HISTOGRAM:
+            return sethistogram(fd, pdata);
+        case CMD_TOTALDATA:
+            return syncserverdata(fd, pdata);
         default:
             return NOTSUPPORT;
     }

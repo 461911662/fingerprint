@@ -27,6 +27,8 @@ enum TOUPCAM_CMD_E{
     CMD_CONTRAST,           /* 对比度调节 */
     CMD_HISTOGRAMTYPE,      /* 直方图方式 */
     CMD_HISTOGRAM,          /* 直方图调节 */
+    CMD_TOTALDATA,          /* 获取服务器当前配置参数 */
+    CMD_DATATSM,            /* TCP直传 */
     /* wifi cfg */
     CMD_SETUDPADDR = 128,         /* UDP 设置客户端地址 */
 };
@@ -62,6 +64,23 @@ typedef struct{
     int bottom;
 }__attribute__((packed))EXPO_RECT_S;
 
+typedef struct  Historam_data
+{
+    unsigned short aLow[4];     /* R,G,B和灰度(Y) */
+    unsigned short aHigh[4];    /* R,G,B和灰度(Y) */
+}__attribute__((packed))HISTORAM_DATA_S;
+
+typedef struct Total_Data{
+    unsigned char brightnesstype;
+    unsigned short brightness;
+    unsigned char expotype;
+    unsigned short expo;
+    unsigned char contrasttype;
+    unsigned int contrast;
+    unsigned char historamtype;
+    HISTORAM_DATA_S historam;
+}__attribute__((packed))TOTAL_DATA_S;
+
 typedef struct Toupcam_common_respon
 {
     TOUPCAM_COMMON_HEADER_S com;
@@ -73,7 +92,10 @@ typedef struct Toupcam_common_respon
         unsigned short expo;
         unsigned char contrasttype;
         unsigned int contrast;
-        EXPO_RECT_S expozone;
+        RECT expozone;
+        unsigned char historamtype;
+        HISTORAM_DATA_S historam;
+        TOTAL_DATA_S totaldata;
         char reserve[2048];
     }data;
 }__attribute__((packed))TOUPCAM_COMMON_RESPON_S;
@@ -89,8 +111,10 @@ typedef struct Toupcam_common_reques
         unsigned char expotype;        /* 0x00:手动   0x01:自动 */
         unsigned short expo;                       /* 曝光值 */
         unsigned char contrasttype;    /* 0x00:手动 0x01:自动     */
-        EXPO_RECT_S expozone;            /* 区域曝光参数 */
+        RECT expozone;            /* 区域曝光参数 */
         int contrast;                              /* 对比度 */
+        unsigned char historamtype;    /* 0x00:手动 0x01:自动     */
+        HISTORAM_DATA_S historam;           /* 直方图数据 */
         char reserve[REQUES_SIZE];
     }data;
 }__attribute__((packed))TOUPCAM_COMMON_REQUES_S;
@@ -136,6 +160,18 @@ typedef struct TWhiteBalance{
     pthread_mutex_t mutex;          /* 设置白平衡保护锁 */
 }TWHITEBALANCE_S;
 
+typedef struct  Historam
+{
+    unsigned char bAutoHis;               /* 设置直方图自动手动模式 */
+    unsigned short aLow[4];     /* R,G,B和灰度(Y) */
+    unsigned short aHigh[4];    /* R,G,B和灰度(Y) */
+    float aHistY[256];
+    float aHistR[256];
+    float aHistG[256];
+    float aHistB[256];
+    pthread_mutex_t mutex;          /* 设置直方图数据保护锁 */
+}HISTORAM_S;
+
 typedef struct Toupcam_instance{
     char sn[32];
     char fwver[16];
@@ -163,6 +199,7 @@ typedef struct Toupcam
     TEXPO_S stTexpo;                    /* 相机曝光参数设置 */
     TWHITEBALANCE_S stWhiteBlc;     /* 相机白平衡参数 */
     TCOLOR_S stTcolor;                  /* 相机颜色参数设置 */
+    HISTORAM_S stHistoram;              /* 相机直方图参数 */
 
     int m_color;                    /* 0:gray 1:color */
     int m_sample;                   /* skip or bin */
