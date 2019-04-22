@@ -191,11 +191,11 @@ unsigned int StartDevice(void *pvoid)
         }
     }
     pToupcam->m_PStaticImageData = g_pStaticImageData;
-
+#if SOFT_ENCODE_H264
     av_register_all();
 
     initX264Encoder(x264Encoder,"myCamera.h264");
-
+#endif
     printf("pTmpToupcam->inWidth:%d, pTmpToupcam->inHeight:%d\n", g_pstTouPcam->inWidth, g_pstTouPcam->inHeight);
     printf("pTmpToupcam->inMaxWidth:%d, pTmpToupcam->inMaxHeight:%d\n", g_pstTouPcam->inMaxWidth, g_pstTouPcam->inMaxHeight);
 

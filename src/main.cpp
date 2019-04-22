@@ -92,13 +92,16 @@ void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx)
             if (FAILED(hr))
                 printf("failed to pull image, hr = %08x\n", hr);
             else
-            {
-                
+            {                
                 /* After we get the image data, we can do anything for the data we want to do */
                 /* printf("pull image ok, total = %u, resolution = %u x %u\n", ++g_total, info.width, info.height); */
                 if(frame_num == 0)
                 {
+#ifdef SOFT_ENCODE_H264
                     encode_yuv((unsigned char *)g_pImageData);
+#else
+                    encode2hardware((unsigned char *)g_pImageData);
+#endif
                     frame_num = 0;
                 }else
                 {

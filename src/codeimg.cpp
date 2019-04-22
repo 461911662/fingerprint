@@ -248,3 +248,10 @@ static void convertFrameToX264Img(x264_image_t *x264InImg,AVFrame *pFrameYUV)
 }
 
 
+void encode2hardware((unsigned char *)g_pImageData)
+{
+    
+    return;
+}
+
+
