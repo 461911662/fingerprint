@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <semaphore.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/select.h>
@@ -23,6 +24,8 @@ using namespace std;
 
 struct sockets *sock; /* udp potr:5004 */
 struct sockets *sock1; /* tcp potr:5005 */
+fd_set rdfs;    /* select 监听字符集 */
+int iMaxfd;     /* select 所监听的最大描述符          */
 
 X264Encoder x264Encoder;
 
@@ -61,6 +64,7 @@ unsigned int g_PthreadMaxNum = ARRAY_SIZE(g_PthreadId);
 pthread_mutex_t g_PthreadMutex_h264;
 pthread_mutex_t g_PthreadMutexJpgDest;
 pthread_mutex_t g_PthreadMutexMonitor;
+sem_t g_SemaphoreHistoram;
 
 extern void Destory_sock(void);
 
@@ -167,16 +171,33 @@ void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx)
     }
 }
 
+static void pHistramCallback(const float aHistY[256], const float aHistR[256], const float aHistG[256], const float aHistB[256], void* pCtx)
+{
+    if(!g_pstTouPcam->m_hcam)
+    {
+        return;
+    }
+    sem_wait(&g_SemaphoreHistoram);
+    memcpy(g_pstTouPcam->stHistoram.aHistY, aHistY, sizeof(g_pstTouPcam->stHistoram.aHistY)); 
+    memcpy(g_pstTouPcam->stHistoram.aHistY, aHistR, sizeof(g_pstTouPcam->stHistoram.aHistR)); 
+    memcpy(g_pstTouPcam->stHistoram.aHistY, aHistG, sizeof(g_pstTouPcam->stHistoram.aHistG)); 
+    memcpy(g_pstTouPcam->stHistoram.aHistY, aHistB, sizeof(g_pstTouPcam->stHistoram.aHistB));
+    sem_post(&g_SemaphoreHistoram);
+    return;
+}
+
+
+
 void *pthread_link_task1(void *argv)
 {
     if(NULL == argv)
     {
         return NULL;
     }
-
-    HRESULT hr;
+    
     int fd = *(int *)argv;
     int pCtx = 0;
+    HRESULT hr;
     int pHistoramCtx = 0;
     TOUPCAM_COMMON_RESPON_S stToupcamRespon;
     stToupcamRespon.com.cmd = COMCMD_TOUPCAMCFG;
@@ -201,26 +222,26 @@ void *pthread_link_task1(void *argv)
 
     while(1)
     {
-        if(g_pstTouPcam->m_hcam)
+        if(!g_pstTouPcam->m_hcam)
         {
             continue;
         }
         pcfinger = pcdes;
-    
+        void *pstr = &pCtx;
         memset(pcfinger, 0, sizeof(g_pstTouPcam->stHistoram.aHistY)*4);
-        PITOUPCAM_HISTOGRAM_CALLBACK pcallback = void (g_pstTouPcam->stHistoram.aHistY, g_pstTouPcam->stHistoram.aHistR, g_pstTouPcam->stHistoram.aHistG, g_pstTouPcam->stHistoram.aHistB, (void*)&pCtx);
-        pthread_mutex_lock(&g_PthreadMutexMonitor);
-        hr = Toupcam_GetHistogram(g_pstTouPcam->m_hcam, pcallback, (void*)&pHistoramCtx);
+        hr = Toupcam_GetHistogram(g_pstTouPcam->m_hcam, pHistramCallback, (void*)&pHistoramCtx);
         if(FAILED(hr))
         {
+            printf("get Historam data failed(%lld)\n", hr);
             pthread_mutex_unlock(&g_PthreadMutexMonitor);
             continue;
         }
-        pthread_mutex_unlock(&g_PthreadMutexMonitor);
+        
 
-        stToupcamRespon.com.size = ARRAY_SIZE(g_pstTouPcam->stHistoram.aHistY)*4;
+        stToupcamRespon.com.size[0] = ARRAY_SIZE(g_pstTouPcam->stHistoram.aHistY)*4;
         stToupcamRespon.cc = ERROR_SUCCESS;
 
+        sem_wait(&g_SemaphoreHistoram);
         memcpy(pcfinger, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE);
         pcfinger+=TOUPCAM_COMMON_RESPON_HEADER_SIZE;
         memcpy(pcfinger, g_pstTouPcam->stHistoram.aHistY, sizeof(g_pstTouPcam->stHistoram.aHistY)); 
@@ -230,20 +251,26 @@ void *pthread_link_task1(void *argv)
         memcpy(pcfinger, g_pstTouPcam->stHistoram.aHistY, sizeof(g_pstTouPcam->stHistoram.aHistY)); 
         pcfinger+=sizeof(g_pstTouPcam->stHistoram.aHistY);
         memcpy(pcfinger, g_pstTouPcam->stHistoram.aHistY, sizeof(g_pstTouPcam->stHistoram.aHistY)); 
-        
+        sem_post(&g_SemaphoreHistoram);
+
         usleep(5000);
         if(fd < 0)
         {
             break;
         }
         
-        send(fd, pcdes, g_pstTouPcam->stHistoram.aHistY)*4+TOUPCAM_COMMON_RESPON_HEADER_SIZE, 0);
-        
+        send(fd, pcdes, sizeof(g_pstTouPcam->stHistoram.aHistY)*4+TOUPCAM_COMMON_RESPON_HEADER_SIZE, 0);
+
     }
+
 }
 
 void link_task(int fd)
 {
+    if(fd < 0)
+    {
+        return;
+    }
     int ifd = fd;
 
     pthread_t  pt;
@@ -271,11 +298,10 @@ void *pthread_server(void *pdata)
     iServerFd = sock1->local;
 
 	struct timeval tv = {5, 0};
-    fd_set rdfs;
 	FD_ZERO(&rdfs);
 	FD_SET(iServerFd, &rdfs);
     fd_set tmprdfs = rdfs;
-	int iMaxfd = iServerFd;
+	iMaxfd = iServerFd;
 	while(1)
 	{
 	    sleep(1);
@@ -309,7 +335,7 @@ void *pthread_server(void *pdata)
 					}
 					FD_SET(iClientFd, &rdfs);
 					printf("tcp(%d) listen(%d)...\n", i, iClientFd);
-                    link_task(i);
+                    link_task(iClientFd);
 				}
 				else
 				{
@@ -380,6 +406,13 @@ void Destory_sock(void)
         sock1 = NULL;
         printf("destory stream sock...\n");
     }
+    /* 异常关闭所监听的描述符 */
+    int i = 0;
+    for(i=3; i<iMaxfd+1; i++)
+    {
+        close(i);
+    }
+    return;
 }
 
 void Destory_Toupcam(void)
@@ -436,6 +469,12 @@ int init_sock(void)
     }
 
 	return iRet;
+}
+
+void semaphore_inits(void)
+{
+    sem_init(&g_SemaphoreHistoram, 0, 1);
+    return;
 }
 
 void pthread_mutex_inits(void)
@@ -516,6 +555,7 @@ int main(int, char**)
 
     /* 初始化线程锁 */
     pthread_mutex_inits();
+    semaphore_inits();
     
     /* tcp server thread */
     iRet = pthread_create(&g_PthreadId[0], NULL, pthread_server, (void *)&iPthredArg);
