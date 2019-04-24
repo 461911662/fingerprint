@@ -191,7 +191,7 @@ unsigned int StartDevice(void *pvoid)
         }
     }
     pToupcam->m_PStaticImageData = g_pStaticImageData;
-#if SOFT_ENCODE_H264
+#ifdef SOFT_ENCODE_H264
     av_register_all();
 
     initX264Encoder(x264Encoder,"myCamera.h264");
@@ -670,21 +670,41 @@ static unsigned int Set_ToupcamOrientation()
         printf("%s: g_pstToupcam is null\n", __func__);
         return ERROR_FAILED;
     }
+    /*
+    HRESULT hr = Toupcam_put_VFlip(g_pstTouPcam->m_hcam, 0);
+    if(FAILED(hr))
+    {
+        printf("init vFlip failed!\n");
+        return ERROR_FAILED;
+    }*/
     HRESULT hr = Toupcam_get_VFlip(g_pstTouPcam->m_hcam, &g_pstTouPcam->iVFlip);
     if(FAILED(hr))
     {
         printf("init vFlip failed!\n");
         return ERROR_FAILED;
     }
+    printf("Toupcam VFlip picture:%s\n", g_pstTouPcam->iVFlip?"negative":"positive");
+
+    hr = Toupcam_put_HFlip(g_pstTouPcam->m_hcam, 1);
+    if(FAILED(hr))
+    {
+        printf("init Hflip failed!\n");
+        return ERROR_FAILED;
+    }    
     hr = Toupcam_get_HFlip(g_pstTouPcam->m_hcam, &g_pstTouPcam->iHFlip);
     if(FAILED(hr))
     {
         printf("init Hflip failed!\n");
         return ERROR_FAILED;
     }
+    printf("Toupcam HFlip picture:%s\n", g_pstTouPcam->iHFlip?"positive":"negative");
+
+    g_pstTouPcam->iVFlip = 0;
+    g_pstTouPcam->iHFlip = 0;
+
 
     /* 图像倒置 */
-    hr = Toupcam_put_Option(g_pstTouPcam->m_hcam, TOUPCAM_OPTION_UPSIDE_DOWN, 1);
+    hr = Toupcam_put_Option(g_pstTouPcam->m_hcam, TOUPCAM_OPTION_UPSIDE_DOWN, 0);
     if(FAILED(hr))
     {
         printf("%s: set frame rate failed.\n", __func__);

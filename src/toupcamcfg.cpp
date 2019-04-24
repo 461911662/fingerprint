@@ -660,7 +660,7 @@ static int setzoneexpo(int fd, void *pdata)
         stExpoRect.top = pstToupcamReq->data.expozone.top;
     }
     
-    if(!g_pstTouPcam->stTexpo.bAutoExposure)
+    if(g_pstTouPcam->stTexpo.bAutoExposure)
     {
         hr = Toupcam_put_AEAuxRect(g_pstTouPcam->m_hcam, &stExpoRect);
         if (FAILED(hr))

@@ -97,11 +97,12 @@ void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx)
                 /* printf("pull image ok, total = %u, resolution = %u x %u\n", ++g_total, info.width, info.height); */
                 if(frame_num == 0)
                 {
-#ifdef SOFT_ENCODE_H264
+ #ifdef SOFT_ENCODE_H264 
                     encode_yuv((unsigned char *)g_pImageData);
 #else
                     encode2hardware((unsigned char *)g_pImageData);
 #endif
+
                     frame_num = 0;
                 }else
                 {
@@ -235,7 +236,7 @@ void *pthread_link_task1(void *argv)
         hr = Toupcam_GetHistogram(g_pstTouPcam->m_hcam, pHistramCallback, (void*)&pHistoramCtx);
         if(FAILED(hr))
         {
-            printf("get Historam data failed(%lld)\n", hr);
+            //printf("get Historam data failed(%lld)\n", hr);
             pthread_mutex_unlock(&g_PthreadMutexMonitor);
             continue;
         }
@@ -338,7 +339,7 @@ void *pthread_server(void *pdata)
 					}
 					FD_SET(iClientFd, &rdfs);
 					printf("tcp(%d) listen(%d)...\n", i, iClientFd);
-                    link_task(iClientFd);
+                    //link_task(iClientFd);
 				}
 				else
 				{

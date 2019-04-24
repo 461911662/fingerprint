@@ -3,8 +3,10 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include "../include/x264.h"
+#include "../include/socket.h"
 #include "../include/codeimg.h"
 #include "../include/jpeglib.h"
+#include "../include/mpp_encode_data.h"
 #include "../include/common_toupcam.h"
 
 extern "C"
@@ -98,9 +100,7 @@ void encode_yuv(unsigned char *g_pImageData)
     sws_scale(sws_ctx, rgbFrame->data, rgbFrame->linesize, 0, height, pFrameYUV->data, pFrameYUV->linesize);
     sws_freeContext(sws_ctx);
 	av_frame_free(&rgbFrame);
-   
     encoderImg(x264Encoder, pFrameYUV);
-
 	av_frame_free(&pFrameYUV);
     free(out_buffer);
     pFrameYUV = NULL;
@@ -248,9 +248,18 @@ static void convertFrameToX264Img(x264_image_t *x264InImg,AVFrame *pFrameYUV)
 }
 
 
-void encode2hardware((unsigned char *)g_pImageData)
+void encode2hardware(unsigned char *g_pImageData)
 {
-    
+    if(NULL == g_pstTouPcam || NULL == g_pImageData || NULL == sock)
+        return;
+    static int iflag = 0;
+    MppEncodeData mppEncodeData = MppEncodeData(sock->local, g_pstTouPcam->inHeight, g_pstTouPcam->inWidth, (unsigned char *)g_pImageData);
+    if(0 == iflag)
+    {
+        iflag = 1;
+        mppEncodeData.init_mpp();
+    }
+    mppEncodeData.startup();
     return;
 }
 
