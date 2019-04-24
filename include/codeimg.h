@@ -1,8 +1,10 @@
 #ifndef _CODEIMG_H_
 #define _CODEIMG_H_
 
-#include "../include/x264.h"
-#include "../include/rtp.h"
+#include "x264.h"
+#include "rtp.h"
+#include "mpp_encode_data.h"
+
 
 //#include "../include/libavutil/frame.h"
 
@@ -18,7 +20,6 @@ typedef struct __X264_ENCODER__
 	FILE *m_x264Fp;
 }X264Encoder;
 #define RGB24_DEPTH  (3)
-
 
 extern X264Encoder x264Encoder;
 extern int nWidth, nHeight;

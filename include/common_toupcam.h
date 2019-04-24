@@ -1,6 +1,8 @@
 #ifndef _COMMON_TOUPCAM_H_
 #define _COMMON_TOUPCAM_H_
 #include "toupcam.h"
+#include "mpp_encode_data.h"
+#include "rockchip/mpp_err.h"
 
 #define REQUES_SIZE  (128)
 #define ARRAY_SIZE(a) sizeof(a)/sizeof(a[0])
@@ -283,6 +285,7 @@ extern unsigned int init_Toupcam(void *pdata);
 extern unsigned int SetupToupcam(TOUPCAM_S* pToupcam);
 extern void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx);
 extern void* getToupcam(void);
+extern void init_mpp();
 
 
 #endif

@@ -195,6 +195,8 @@ unsigned int StartDevice(void *pvoid)
     av_register_all();
 
     initX264Encoder(x264Encoder,"myCamera.h264");
+#else
+    init_mpp();
 #endif
     printf("pTmpToupcam->inWidth:%d, pTmpToupcam->inHeight:%d\n", g_pstTouPcam->inWidth, g_pstTouPcam->inHeight);
     printf("pTmpToupcam->inMaxWidth:%d, pTmpToupcam->inMaxHeight:%d\n", g_pstTouPcam->inMaxWidth, g_pstTouPcam->inMaxHeight);

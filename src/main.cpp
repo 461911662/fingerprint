@@ -17,6 +17,7 @@
 #include "../include/rtp.h"
 #include "../include/toupcam.h"
 #include "../include/common_toupcam.h"
+#include "../include/mpp_encode_data.h"
 
 //using namespace cv;
 using namespace std;
@@ -42,6 +43,7 @@ int sendnum = 0; /* 当前已发rtp数据包数量 */
 HToupCam g_hcam = NULL;
 void* g_pImageData = NULL;
 void* g_pStaticImageData = NULL;
+MPP_ENC_DATA_S *g_pstmpp_enc_data = NULL;
 int g_pStaticImageDataFlag = 0; /* 检测静态图片是否捕获完成 */
 
 unsigned g_total = 0;
@@ -67,6 +69,7 @@ pthread_mutex_t g_PthreadMutexMonitor;
 sem_t g_SemaphoreHistoram;
 
 extern void Destory_sock(void);
+extern MPP_RET mpp_ctx_deinit(MPP_ENC_DATA_S **data);
 
 union { 
     char c[4]; 
@@ -250,11 +253,11 @@ void *pthread_link_task1(void *argv)
         pcfinger+=TOUPCAM_COMMON_RESPON_HEADER_SIZE;
         memcpy(pcfinger, g_pstTouPcam->stHistoram.aHistY, sizeof(g_pstTouPcam->stHistoram.aHistY)); 
         pcfinger+=sizeof(g_pstTouPcam->stHistoram.aHistY);
-        memcpy(pcfinger, g_pstTouPcam->stHistoram.aHistY, sizeof(g_pstTouPcam->stHistoram.aHistY)); 
-        pcfinger+=sizeof(g_pstTouPcam->stHistoram.aHistY);
-        memcpy(pcfinger, g_pstTouPcam->stHistoram.aHistY, sizeof(g_pstTouPcam->stHistoram.aHistY)); 
-        pcfinger+=sizeof(g_pstTouPcam->stHistoram.aHistY);
-        memcpy(pcfinger, g_pstTouPcam->stHistoram.aHistY, sizeof(g_pstTouPcam->stHistoram.aHistY)); 
+        memcpy(pcfinger, g_pstTouPcam->stHistoram.aHistR, sizeof(g_pstTouPcam->stHistoram.aHistR)); 
+        pcfinger+=sizeof(g_pstTouPcam->stHistoram.aHistR);
+        memcpy(pcfinger, g_pstTouPcam->stHistoram.aHistG, sizeof(g_pstTouPcam->stHistoram.aHistG)); 
+        pcfinger+=sizeof(g_pstTouPcam->stHistoram.aHistG);
+        memcpy(pcfinger, g_pstTouPcam->stHistoram.aHistB, sizeof(g_pstTouPcam->stHistoram.aHistB)); 
         sem_post(&g_SemaphoreHistoram);
 
         usleep(5000);
@@ -344,10 +347,29 @@ void *pthread_server(void *pdata)
 				else
 				{
 					memset(g_cBuffData, 0, ARRAY_SIZE(g_cBuffData));
-					iRet = read(i, g_cBuffData, ARRAY_SIZE(g_cBuffData));
+					iRet = read(i, g_cBuffData, sizeof(TOUPCAM_COMMON_REQUES_S));
 					if(iRet > 0)
 					{
 						char *pcBuffData = strstr(g_cBuffData, "proto");
+                        /*
+                        char *pcBuff = pcBuffData;
+                        
+                        while(1)
+                        {
+                            pcBuff = strstr(pcBuff, "proto");
+                            if(NULL == pcBuff)
+                            {
+                                break;
+                            }
+                            pcBuffData = pcBuff;
+                            if(pcBuff >= g_cBuffData+ARRAY_SIZE(g_cBuffData)-5)
+                            {
+                                break;
+                            }
+                            pcBuff += 5;
+                        }
+                        */
+                        
 						if(NULL == pcBuffData)
 						{
 							printf("no proto.\n");
@@ -363,7 +385,7 @@ void *pthread_server(void *pdata)
 						}
 						printf("\n");
 						*/
-						memcpy(&stToupcam_common_req, g_cBuffData, sizeof(TOUPCAM_COMMON_REQUES_S));
+						memcpy(&stToupcam_common_req, pcBuffData, sizeof(TOUPCAM_COMMON_REQUES_S));
                         if(!iEndianness)
                         {
                            uiSize = BIGLITTLESWAP32(stToupcam_common_req.com.size[0]);
@@ -595,6 +617,10 @@ int main(int, char**)
 #endif
 
     pthread_mutex_destroys();
+
+#ifndef SOFT_ENCODE_H264
+    mpp_ctx_deinit(&g_pstmpp_enc_data);
+#endif
 
 exit1_:
     Destory_Toupcam();

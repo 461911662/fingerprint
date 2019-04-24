@@ -242,7 +242,7 @@ static int setbrightnesstype(int fd, void *pdata)
         /* Toupcam_put_Brightness(g_pstTouPcam->m_hcam, g_pstTouPcam->stTexpo.bAutoExposure); */
         Toupcam_put_AutoExpoEnable(g_pstTouPcam->m_hcam, g_pstTouPcam->stTexpo.bAutoExposure);
         Toupcam_get_AutoExpoEnable(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.bAutoExposure);
-        printf("cur expo mode:%s\n", g_pstTouPcam->stTexpo.bAutoExposure?"auto":"manu");
+        printf("cur brightness mode:%s\n", g_pstTouPcam->stTexpo.bAutoExposure?"manu":"auto");
         if(g_pstTouPcam->stTexpo.bAutoExposure != pstToupcamReq->data.brightnesstype)
         {
             pthread_mutex_unlock(&g_pstTouPcam->stTexpo.mutex);
@@ -251,7 +251,7 @@ static int setbrightnesstype(int fd, void *pdata)
     }
     else
     {
-        printf("cur expo mode:%s\n", g_pstTouPcam->stTexpo.bAutoExposure?"auto":"manu");
+        printf("cur brightness mode:%s\n", g_pstTouPcam->stTexpo.bAutoExposure?"manu":"auto");
     }
     stToupcamRespon.data.brightness = g_pstTouPcam->stTexpo.bAutoExposure;
 
@@ -307,14 +307,14 @@ static int setbrightness(int fd, void *pdata)
         usBrightness = pstToupcamReq->data.brightness;
     }
 
-    if(g_pstTouPcam->stTexpo.AnMin < usBrightness || g_pstTouPcam->stTexpo.AnMax > usBrightness)
+    if(g_pstTouPcam->stTexpo.AnMin > usBrightness || g_pstTouPcam->stTexpo.AnMax < usBrightness)
     {
         printf("more than the range of brightness.\n");
         goto _exit0;
     }
 
     pthread_mutex_lock(&g_pstTouPcam->stTexpo.mutex);
-    if(0x01 == g_pstTouPcam->stTexpo.bAutoExposure)
+    if(0x01 != g_pstTouPcam->stTexpo.bAutoExposure) /* 与曝光方式逻辑相反 */
     {
         g_pstTouPcam->stTexpo.AGain = usBrightness;
         hr = Toupcam_put_ExpoAGain(g_pstTouPcam->m_hcam, g_pstTouPcam->stTexpo.AGain);
@@ -337,11 +337,12 @@ static int setbrightness(int fd, void *pdata)
     }
     else
     {
-        printf("not set brightness,because of this is manu mode!!!\n");
+        printf("not set brightness,because of this is auto mode!!!\n");
         pthread_mutex_unlock(&g_pstTouPcam->stTexpo.mutex);
         goto _exit0;
     }
     pthread_mutex_unlock(&g_pstTouPcam->stTexpo.mutex);
+    printf("brightness value: %d\n", g_pstTouPcam->stTexpo.AGain);
 
     send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE+2, 0);
 
@@ -570,11 +571,11 @@ static int setcontrast(int fd, void *pdata)
 
     if(!iEndianness)
     {
-        iContrast = BIGLITTLESWAP32(pstToupcamReq->data.contrast);
+        iContrast = (short)BIGLITTLESWAP32(pstToupcamReq->data.contrast);
     }
     else
     {
-        iContrast = pstToupcamReq->data.contrast;
+        iContrast = (short)pstToupcamReq->data.contrast;
     }    
     
     pthread_mutex_lock(&g_pstTouPcam->stTcolor.mutex);
@@ -857,7 +858,7 @@ static int syncserverdata(int fd, void *pdata)
     TOUPCAM_COMMON_REQUES_S *pstToupcamReq = (TOUPCAM_COMMON_REQUES_S *)pdata;
 
     fillresponheader(&stToupcamRespon);
-    stToupcamRespon.com.subcmd = CMD_HISTOGRAM;
+    stToupcamRespon.com.subcmd = CMD_TOTALDATA;
     stToupcamRespon.com.size[0] = INVAILD_BUFF_SIZE;
 
     if(TCP_REQUEST != pstToupcamReq->com.type)
