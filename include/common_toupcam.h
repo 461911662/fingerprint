@@ -7,7 +7,7 @@
 #define REQUES_SIZE  (128)
 #define ARRAY_SIZE(a) sizeof(a)/sizeof(a[0])
 
-//#define SOFT_ENCODE_H264
+#define SOFT_ENCODE_H264
 
 #define END_BUFF_SIZE         (0)
 #define INVAILD_BUFF_SIZE     (1)
@@ -32,7 +32,7 @@ enum TOUPCAM_CMD_E{
     CMD_HISTOGRAMTYPE,      /* 直方图方式 */
     CMD_HISTOGRAM,          /* 直方图调节 */
     CMD_TOTALDATA,          /* 获取服务器当前配置参数 */
-    CMD_DATATSM,            /* TCP直传 */
+    CMD_DATATSM,            /* TCP UDP直传 */
     /* wifi cfg */
     CMD_SETUDPADDR = 128,         /* UDP 设置客户端地址 */
 };
@@ -128,6 +128,7 @@ typedef struct Texpo
     /* Toupcam相机曝光参数 */
     char changed;                   /* 描述曝光时间发生变化的标志 */
     int bAutoExposure;              /* 设置自动曝光，True        or False */
+    int bAutoAGain;                 /* 设置自动曝光增益 */
     unsigned short AutoTarget;      /* 自动曝光目标值 */
     unsigned AutoMaxTime;           /* 设置自动曝光的最大时间 */
     unsigned short AutoMaxAGain;    /* 设置自动曝光的最大增益            */

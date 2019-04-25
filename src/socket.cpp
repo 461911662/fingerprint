@@ -89,15 +89,19 @@ unsigned int socket_dgram_init()
  
     //创建，填充客户端地址
     struct sockaddr_in* sockcli;
-    sockcli=(struct sockaddr_in *)malloc(sizeof(struct sockaddr_in));
-    memset(sockcli,0,sizeof(struct sockaddr_in));
+    sockcli = (struct sockaddr_in *)malloc(sizeof(struct sockaddr_in)*2);
+    memset(sockcli,0,sizeof(struct sockaddr_in)*2);
  
-    sockcli->sin_port=htons(UDP_PORT);
- 
+    sockcli->sin_port=htons(UDP_PORT1);
     sockcli->sin_family = AF_INET;
     sockcli->sin_addr.s_addr=inet_addr(CLIENT_IP);
+
+    (sockcli+1)->sin_port=htons(UDP_PORT2);
+    (sockcli+1)->sin_family = AF_INET;
+    (sockcli+1)->sin_addr.s_addr=inet_addr(CLIENT_IP);
  
-    sock->cliaddr=sockcli;
+    sock->cliaddr[0]=sockcli;
+    sock->cliaddr[1]=sockcli+1;
 
     return iRet;
 }

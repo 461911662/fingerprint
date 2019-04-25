@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <signal.h>
 #include <semaphore.h>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -78,6 +79,8 @@ union {
 
 #define ENDIANNESS ((char)endian_test.l)
 
+void signal_func(int event) { 
+}
 
 void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx)
 {
@@ -154,6 +157,16 @@ void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx)
             /* not support it yet */
             break;
         case TOUPCAM_EVENT_EXPOSURE:     /* exposure time changed */
+            /* printf("toupcam event TOUPCAM_EVENT_EXPOSURE(%d).\n", nEvent); */
+            if(g_pstTouPcam->OnEventExpo)
+            {
+                g_pstTouPcam->OnEventExpo();
+            }
+            else
+            {
+                printf("TOUPCAM_EVENT_EXPOSURE: not register it!!!\n");
+            }
+            break;
         case TOUPCAM_EVENT_TRIGGERFAIL:  /* trigger failed */
         case TOUPCAM_EVENT_BLACK:        /* black balance changed */
         case TOUPCAM_EVENT_FFC:          /* flat field correction status changed */
@@ -201,7 +214,9 @@ void *pthread_link_task1(void *argv)
     {
         return NULL;
     }
-    
+
+    int iNum = 0;
+    int iLen = 0;
     int fd = *(int *)argv;
     int pCtx = 0;
     HRESULT hr;
@@ -216,8 +231,9 @@ void *pthread_link_task1(void *argv)
     stToupcamRespon.cc = ERROR_SUCCESS;
     memset(stToupcamRespon.data.reserve, 0, ARRAY_SIZE(stToupcamRespon.data.reserve));
 
-    stToupcamRespon.com.type = TCP_DIRECTTSM;
-    stToupcamRespon.com.cmd = CMD_DATATSM;
+    stToupcamRespon.com.type = UDP_DATATSM;
+    stToupcamRespon.com.cmd = COMCMD_TOUPCAMCFG;
+    stToupcamRespon.com.subcmd = CMD_DATATSM;
 
     char *pcdes = (char *)malloc(sizeof(g_pstTouPcam->stHistoram.aHistY)*4+TOUPCAM_COMMON_RESPON_HEADER_SIZE);
     char *pcfinger = NULL;
@@ -239,8 +255,7 @@ void *pthread_link_task1(void *argv)
         hr = Toupcam_GetHistogram(g_pstTouPcam->m_hcam, pHistramCallback, (void*)&pHistoramCtx);
         if(FAILED(hr))
         {
-            //printf("get Historam data failed(%lld)\n", hr);
-            pthread_mutex_unlock(&g_PthreadMutexMonitor);
+            printf("get Historam data failed(%lld)\n", hr);
             continue;
         }
         
@@ -265,10 +280,21 @@ void *pthread_link_task1(void *argv)
         {
             break;
         }
-        
-        send(fd, pcdes, sizeof(g_pstTouPcam->stHistoram.aHistY)*4+TOUPCAM_COMMON_RESPON_HEADER_SIZE, 0);
 
+        iLen = sizeof(g_pstTouPcam->stHistoram.aHistY)*4+TOUPCAM_COMMON_RESPON_HEADER_SIZE;
+        
+        if((iNum=sendto(sock->local, pcdes, iLen, 0, (struct sockaddr *)sock->cliaddr[1], sizeof(struct sockaddr_in)))==-1)
+        {
+            fail("socket: %s\n", strerror(errno));
+        }
+        //printf("send: sock->local:%d iLen:%d, ip:%s.\n", sock->local, iLen, inet_ntoa(sock->cliaddr[1]->sin_addr));
+    
     }
+    
+    free(pcdes);
+    pcdes = NULL;
+
+    return NULL;
 
 }
 
@@ -285,7 +311,7 @@ void link_task(int fd)
     /* create link task */
     pthread_create(&pt, NULL, pthread_link_task1, (void *)&ifd);
 
-    pthread_join(pt, NULL);
+    //pthread_join(pt, NULL);
 
     return ;
 }
@@ -342,7 +368,7 @@ void *pthread_server(void *pdata)
 					}
 					FD_SET(iClientFd, &rdfs);
 					printf("tcp(%d) listen(%d)...\n", i, iClientFd);
-                    //link_task(iClientFd);
+                    link_task(iClientFd);
 				}
 				else
 				{
@@ -561,7 +587,10 @@ int main(int, char**)
 	int inWidth = 0, inHeight = 0;
     int iPthredArg = 0;
     int iRet = 0;
-	
+
+    /* 初始化信号 */
+    signal(SIGPIPE,signal_func);
+    
     /* 初始化sock数据,用于wifi网络视频帧传输和控制协议传输 */
     iRet = init_sock();
     if(ERROR_FAILED == iRet)

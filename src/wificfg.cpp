@@ -54,7 +54,7 @@ static int setudpaddr(int fd, void *pdata)
 #endif
 
     uiIPV4Def = inet_addr(CLIENT_IP);
-    if(uiIPV4Def == sock->cliaddr->sin_addr.s_addr)
+    if(uiIPV4Def == sock->cliaddr[0]->sin_addr.s_addr)
     {
         if(uiIPV4Def == uiIPV4Addr)
         {
@@ -62,14 +62,14 @@ static int setudpaddr(int fd, void *pdata)
         }
         else
         {
-            sock->cliaddr->sin_addr.s_addr = uiIPV4Addr;
+            sock->cliaddr[0]->sin_addr.s_addr = uiIPV4Addr;
             stToupcamRespon.cc = ERROR_SUCCESS;
         }
     }
     else
     {
         stToupcamRespon.cc = ERROR_WIFI_ADDR_HOLD;
-        sock->cliaddr->sin_addr.s_addr = uiIPV4Def;
+        sock->cliaddr[0]->sin_addr.s_addr = uiIPV4Def;
     }
 
     stToupcamRespon.com.size[0] = COMMON_BUFF_SIZE;

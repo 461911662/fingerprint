@@ -51,6 +51,7 @@ static unsigned int SetAutoExpo_Toupcam();
 static unsigned int Set_WhiteBalanceToupcam();
 static unsigned int Set_ColorToupcam();
 static unsigned int Set_ToupcamOrientation();
+static int init_Toupcam_button();
 
 
 COM_ENTRY_S g_Comm_Entry[] = {
@@ -112,10 +113,10 @@ unsigned int PreInitialDevice(void *pvoid)
     printf("############ \033[40;31mlaplat camera program start \033[0m##############\n");
     printf("#######################################################\n\n");
 
-    printf("%17s\033[40;31%s\033[0m\n", "Toupcam sn:", pTmpToupcam->m_ins.sn[0]?pTmpToupcam->m_ins.sn:"null");
-    printf("%17s\033[40;31%s\033[0m\n", "Toupcam fwver:", pTmpToupcam->m_ins.fwver[0]?pTmpToupcam->m_ins.fwver:"null");
-    printf("%17s\033[40;31%s\033[0m\n", "Toupcam hwver:", pTmpToupcam->m_ins.hwver[0]?pTmpToupcam->m_ins.hwver:"null");
-    printf("%17s\033[40;31%s\033[0m\n", "Toupcam date:", pTmpToupcam->m_ins.pdate[0]?pTmpToupcam->m_ins.pdate:"null");
+    printf("%17s\033[40;31%s\033[0m\n", "Toupcam sn: ", pTmpToupcam->m_ins.sn[0]?pTmpToupcam->m_ins.sn:" null");
+    printf("%17s\033[40;31%s\033[0m\n", "Toupcam fwver:", pTmpToupcam->m_ins.fwver[0]?pTmpToupcam->m_ins.fwver:" null");
+    printf("%17s\033[40;31%s\033[0m\n", "Toupcam hwver:", pTmpToupcam->m_ins.hwver[0]?pTmpToupcam->m_ins.hwver:" null");
+    printf("%17s\033[40;31%s\033[0m\n", "Toupcam date:", pTmpToupcam->m_ins.pdate[0]?pTmpToupcam->m_ins.pdate:" null");
     printf("%17s\033[40;31%d\033[0m\n", "Toupcam Revision:", pTmpToupcam->m_ins.pRevision?pTmpToupcam->m_ins.pRevision:0);
 
     if(!pTmpToupcam->m_ins.sn[0] || !pTmpToupcam->m_ins.fwver[0] || !pTmpToupcam->m_ins.hwver[0]
@@ -334,6 +335,14 @@ unsigned int ConfigDevice(void *pvoid)
         return ERROR_FAILED;
     }
 
+    /* 初始化toupcam Button */
+    iRet = init_Toupcam_button();
+    if(FAILED(iRet))
+    {
+        printf("%s: get power source Hz failed.\n", __func__);
+        return ERROR_FAILED;
+    }    
+    
     return ERROR_SUCCESS;
 
 
@@ -379,7 +388,20 @@ void OnEventImage()
 
 void OnEventExpo()
 {
-    ;
+    HRESULT hr;
+    if(g_pstTouPcam->stTexpo.bAutoExposure)
+    {
+        hr = Toupcam_get_ExpoTime(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.Time);
+        if(FAILED(hr))
+        {
+            //printf("%s: get expo time failed!\n", __func__);
+        }
+    }
+    else
+    {
+        printf("%s: cur expo mode:%s.\n", __func__, g_pstTouPcam->stTexpo.bAutoExposure?"auto":"manu");
+    }
+    return;
 }
 
 void OnEventTempTint()
@@ -434,6 +456,7 @@ static unsigned int _init(void)
     g_pstTouPcam->CloseDevice = CloseDevice;
 
     g_pstTouPcam->OnEventImage = OnEventImage;
+    g_pstTouPcam->OnEventExpo = OnEventExpo;
 
     return iRet;
 }
@@ -572,13 +595,16 @@ static unsigned int SetAutoExpo_Toupcam()
     Toupcam_get_MaxAutoExpoTimeAGain(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.AutoMaxTime, &g_pstTouPcam->stTexpo.AutoMaxAGain);
     Toupcam_get_RealExpoTime(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.Time);
     Toupcam_get_ExpTimeRange(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.nMin, &g_pstTouPcam->stTexpo.nMax, &g_pstTouPcam->stTexpo.nDef);
+    Toupcam_get_ExpoAGain(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.AGain);
     Toupcam_get_ExpoAGainRange(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.AnMin, &g_pstTouPcam->stTexpo.AnMax, &g_pstTouPcam->stTexpo.AnDef);
     g_pstTouPcam->stTexpo.scale = 9.375;
+    
     pthread_mutex_unlock(&g_pstTouPcam->stTexpo.mutex);
 
     printf("expo param:\n");
     printf("cur expo real time:%u.\n", g_pstTouPcam->stTexpo.Time);
     printf("cur max expo time Min:%u,Max:%u,Def:%u.\n", g_pstTouPcam->stTexpo.nMin, g_pstTouPcam->stTexpo.nMax, g_pstTouPcam->stTexpo.nDef);
+    printf("cur expo AGain:%d\n", g_pstTouPcam->stTexpo.AGain);
     printf("cur max expo Value AMin:%u,AMax:%u,ADef:%u.\n", g_pstTouPcam->stTexpo.AnMin, g_pstTouPcam->stTexpo.AnMax, g_pstTouPcam->stTexpo.AnDef);
     printf("cur max expo time:%u, max AGain time:%us.\n", g_pstTouPcam->stTexpo.AutoMaxTime, g_pstTouPcam->stTexpo.AutoMaxAGain);
     
@@ -648,6 +674,7 @@ static unsigned int Set_ColorToupcam()
         pthread_mutex_unlock(&g_pstTouPcam->stTcolor.mutex);
         return ERROR_FAILED;
     }
+    printf("Toupcam get Contrast:%d\n", g_pstTouPcam->stTcolor.Contrast);
 
     g_pstTouPcam->stTcolor.Gamma = 100;
     hr = Toupcam_put_Gamma(g_pstTouPcam->m_hcam, g_pstTouPcam->stTcolor.Gamma);
@@ -657,6 +684,7 @@ static unsigned int Set_ColorToupcam()
         pthread_mutex_unlock(&g_pstTouPcam->stTcolor.mutex);
         return ERROR_FAILED;
     }    
+    printf("Toupcam get Gamma:%d\n", g_pstTouPcam->stTcolor.Gamma);
 
     pthread_mutex_unlock(&g_pstTouPcam->stTcolor.mutex);
     return ERROR_SUCCESS;
@@ -713,9 +741,26 @@ static unsigned int Set_ToupcamOrientation()
         return ERROR_FAILED;
     }
 
+    nWidth = 640, nHeight = 480;
+    //WIDTH = nWidth, HEIGHT = nHeight;
+    g_pstTouPcam->inHeight = g_pstTouPcam->inMaxHeight = 480;
+    g_pstTouPcam->inWidth = g_pstTouPcam->inMaxWidth = 640;
+    Toupcam_put_Roi(g_hcam, 200, 200, 640, 480);
+    
     return ERROR_SUCCESS;
 }
 
+/*
+* 设置Toupcam对应开关值
+*/
+static int init_Toupcam_button()
+{
+    g_pstTouPcam->stTexpo.bAutoExposure = 0;
+    g_pstTouPcam->stTexpo.bAutoAGain = 1;
+    g_pstTouPcam->stTcolor.bAutoColor = 1;
+    g_pstTouPcam->stHistoram.bAutoHis = 1;
+    return ERROR_SUCCESS;
+}
 
 /*
 * 初始化Toupcam数据结构

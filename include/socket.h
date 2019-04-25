@@ -10,13 +10,14 @@
 #define CLIENT_IP   "192.168.1.102" /* dgram sock default */
 #endif
 
-#define UDP_PORT  5004
+#define UDP_PORT1  5004
+#define UDP_PORT2  5008
 #define TCP_PORT  9999
 #define TCP_LISTEN_NUM 10
 #define TCP_BUFFER_SIZE  1024
 #define TCP_REQUEST 0x01
 #define TCP_RESPONSE 0x02
-#define TCP_DIRECTTSM 0x03
+#define UDP_DATATSM 0x05
 #define TCP_BUFFERSIZE 1024
 //#define TCP_BUFFERSIZE 1023
 
@@ -26,7 +27,7 @@ struct sockets
     int local;
     int reclen;
     FILE *in,*out;
-    struct sockaddr_in *cliaddr;
+    struct sockaddr_in *cliaddr[2];
 };
  
 //配置信息

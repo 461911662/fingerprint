@@ -476,7 +476,7 @@ int encode_jpeg(unsigned char *pucImageData)
     }
     g_pStaticImageDataFlag = 1;
     pthread_mutex_unlock(&g_PthreadMutexJpgDest);
- 
+
     return iRet;
 }
 
@@ -657,10 +657,12 @@ MPP_RET mpp_encode(MPP_ENC_DATA_S *p, unsigned char *yuv, unsigned long len)
         return MPP_ERR_NULL_PTR;
     }
 
+    static int flag = 0;
+
     mpi = p->mpi;
     ctx = p->ctx;
 
-    if (p->type == MPP_VIDEO_CodingAVC) 
+    if (p->type == MPP_VIDEO_CodingAVC && 0 == flag) 
     {
         MppPacket packet = NULL;
         ret = mpi->control(ctx, MPP_ENC_GET_EXTRA_INFO, &packet);
@@ -676,11 +678,12 @@ MPP_RET mpp_encode(MPP_ENC_DATA_S *p, unsigned char *yuv, unsigned long len)
             void *ptr   = mpp_packet_get_pos(packet);
             size_t len  = mpp_packet_get_length(packet);
 
-            //if (p->fp_output)
-                //fwrite(ptr, 1, len, p->fp_output);
+            if (p->fp_output)
+                fwrite(ptr, 1, len, p->fp_output);
 
             packet = NULL;
         }
+        flag = 1;
     }
 
     buf =mpp_buffer_get_ptr(p->frm_buf);
@@ -723,8 +726,8 @@ MPP_RET mpp_encode(MPP_ENC_DATA_S *p, unsigned char *yuv, unsigned long len)
 
         rtp_transmit(ptr, len);
 
-        //if (p->fp_output)
-            //fwrite(ptr, 1, len, p->fp_output);
+        if (p->fp_output)
+            fwrite(ptr, 1, len, p->fp_output);
         mpp_packet_deinit(&packet);
 
         printf("encoded frame %d size %d\n", p->frame_count, len);
