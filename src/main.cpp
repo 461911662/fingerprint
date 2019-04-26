@@ -67,6 +67,7 @@ unsigned int g_PthreadMaxNum = ARRAY_SIZE(g_PthreadId);
 pthread_mutex_t g_PthreadMutex_h264;
 pthread_mutex_t g_PthreadMutexJpgDest;
 pthread_mutex_t g_PthreadMutexMonitor;
+pthread_mutex_t g_PthreadMutexUDP;
 sem_t g_SemaphoreHistoram;
 
 extern void Destory_sock(void);
@@ -197,11 +198,12 @@ static void pHistramCallback(const float aHistY[256], const float aHistR[256], c
     {
         return;
     }
+
     sem_wait(&g_SemaphoreHistoram);
     memcpy(g_pstTouPcam->stHistoram.aHistY, aHistY, sizeof(g_pstTouPcam->stHistoram.aHistY)); 
-    memcpy(g_pstTouPcam->stHistoram.aHistY, aHistR, sizeof(g_pstTouPcam->stHistoram.aHistR)); 
-    memcpy(g_pstTouPcam->stHistoram.aHistY, aHistG, sizeof(g_pstTouPcam->stHistoram.aHistG)); 
-    memcpy(g_pstTouPcam->stHistoram.aHistY, aHistB, sizeof(g_pstTouPcam->stHistoram.aHistB));
+    memcpy(g_pstTouPcam->stHistoram.aHistR, aHistR, sizeof(g_pstTouPcam->stHistoram.aHistR)); 
+    memcpy(g_pstTouPcam->stHistoram.aHistG, aHistG, sizeof(g_pstTouPcam->stHistoram.aHistG)); 
+    memcpy(g_pstTouPcam->stHistoram.aHistB, aHistB, sizeof(g_pstTouPcam->stHistoram.aHistB));
     sem_post(&g_SemaphoreHistoram);
     return;
 }
@@ -267,29 +269,29 @@ void *pthread_link_task1(void *argv)
         memcpy(pcfinger, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE);
         pcfinger+=TOUPCAM_COMMON_RESPON_HEADER_SIZE;
         memcpy(pcfinger, g_pstTouPcam->stHistoram.aHistY, sizeof(g_pstTouPcam->stHistoram.aHistY)); 
+#ifdef HISTOGRAM_RGB
         pcfinger+=sizeof(g_pstTouPcam->stHistoram.aHistY);
         memcpy(pcfinger, g_pstTouPcam->stHistoram.aHistR, sizeof(g_pstTouPcam->stHistoram.aHistR)); 
         pcfinger+=sizeof(g_pstTouPcam->stHistoram.aHistR);
         memcpy(pcfinger, g_pstTouPcam->stHistoram.aHistG, sizeof(g_pstTouPcam->stHistoram.aHistG)); 
         pcfinger+=sizeof(g_pstTouPcam->stHistoram.aHistG);
         memcpy(pcfinger, g_pstTouPcam->stHistoram.aHistB, sizeof(g_pstTouPcam->stHistoram.aHistB)); 
+#endif
         sem_post(&g_SemaphoreHistoram);
-
-        usleep(5000);
-        if(fd < 0)
-        {
-            break;
-        }
+        usleep(500000);
 
         iLen = sizeof(g_pstTouPcam->stHistoram.aHistY)*4+TOUPCAM_COMMON_RESPON_HEADER_SIZE;
-        
+
+        pthread_mutex_lock(&g_PthreadMutexUDP);
         if((iNum=sendto(sock->local, pcdes, iLen, 0, (struct sockaddr *)sock->cliaddr[1], sizeof(struct sockaddr_in)))==-1)
         {
             fail("socket: %s\n", strerror(errno));
         }
+        pthread_mutex_unlock(&g_PthreadMutexUDP);
         //printf("send: sock->local:%d iLen:%d, ip:%s.\n", sock->local, iLen, inet_ntoa(sock->cliaddr[1]->sin_addr));
-    
+
     }
+
     
     free(pcdes);
     pcdes = NULL;
@@ -298,13 +300,9 @@ void *pthread_link_task1(void *argv)
 
 }
 
-void link_task(int fd)
+void link_task()
 {
-    if(fd < 0)
-    {
-        return;
-    }
-    int ifd = fd;
+    int ifd = 0;
 
     pthread_t  pt;
 
@@ -368,7 +366,7 @@ void *pthread_server(void *pdata)
 					}
 					FD_SET(iClientFd, &rdfs);
 					printf("tcp(%d) listen(%d)...\n", i, iClientFd);
-                    link_task(iClientFd);
+                    link_task();
 				}
 				else
 				{
@@ -525,7 +523,7 @@ int init_sock(void)
 
 void semaphore_inits(void)
 {
-    sem_init(&g_SemaphoreHistoram, 0, 1);
+    sem_init(&g_SemaphoreHistoram, 0, 0);
     return;
 }
 
@@ -534,6 +532,7 @@ void pthread_mutex_inits(void)
     /* 初始化jpeg线程数据保护锁 */
     pthread_mutex_init(&g_PthreadMutexJpgDest, NULL);
     pthread_mutex_init(&g_PthreadMutexMonitor, NULL);
+    pthread_mutex_init(&g_PthreadMutexUDP, NULL); 
     return;
 }
 
@@ -542,6 +541,7 @@ void pthread_mutex_destroys()
     /* 销毁线程锁 */
     pthread_mutex_destroy(&g_PthreadMutexJpgDest);
     pthread_mutex_destroy(&g_PthreadMutexMonitor);
+    pthread_mutex_destroy(&g_PthreadMutexUDP);
     return;
 }
 

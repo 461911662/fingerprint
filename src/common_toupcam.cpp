@@ -246,6 +246,9 @@ unsigned int ConfigDevice(void *pvoid)
     {
         iRet = Toupcam_put_eSize(pTmpToupcam->m_hcam, iRSL_Num-1);  /* 预览适配最小分辨率 */
         iRet += Toupcam_get_Resolution(pTmpToupcam->m_hcam, iRSL_Num-1, &iWidth, &iHeight);
+        //iRet = Toupcam_put_eSize(pTmpToupcam->m_hcam, 0);  /* 预览适配最大分辨率 */
+        //iRet += Toupcam_get_Resolution(pTmpToupcam->m_hcam, 0, &iWidth, &iHeight);
+
         iRet += Toupcam_get_Resolution(pTmpToupcam->m_hcam, 0, &iMaxWidth, &iMaxHeight);  /* 抓拍适配最大分辨率 */
 
         nWidth = iWidth;
@@ -399,7 +402,7 @@ void OnEventExpo()
     }
     else
     {
-        printf("%s: cur expo mode:%s.\n", __func__, g_pstTouPcam->stTexpo.bAutoExposure?"auto":"manu");
+        //printf("%s: cur expo mode:%s.\n", __func__, g_pstTouPcam->stTexpo.bAutoExposure?"auto":"manu");
     }
     return;
 }

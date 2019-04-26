@@ -480,7 +480,65 @@ int encode_jpeg(unsigned char *pucImageData)
     return iRet;
 }
 
-static unsigned int rtp_transmit(void *ptr, size_t len)
+static void repeatencode2h264(char *ptr, void *rsppsp, size_t *len, size_t len0)
+{
+    if(NULL == ptr)
+    {
+        printf("%s: ptr is null.\n", __func__);
+        return ;
+    }
+    char *pcfinish = NULL;
+    char flag = 0;
+    char *pctr = ptr;
+    char *pctr2 = NULL;
+
+    /* init x264Encode array */
+    x264_nal_t *px264Nal = NULL;
+    x264_nal_t *x264Nal = NULL;
+    size_t ilen = *len;
+    
+    memset(&x264Encoder, 0, sizeof(x264Encoder));
+    /* 分解h264裸数据 */
+    while(ilen>4 && ilen--)
+    {
+        if(*((int*)pctr) == 0x01000000)  /* start code */
+        {
+            pctr2 = pctr;
+            x264Encoder.m_x264iNal++;
+            px264Nal = (x264_nal_t *)malloc(sizeof(x264_nal_t));
+            px264Nal->i_type = *(pctr+4) & 0x1f;
+            px264Nal->i_payload = ilen;
+            px264Nal->p_payload = (uint8_t*)pctr;
+        }
+        pctr++;
+    }
+
+    x264Encoder.m_pX264Nals = px264Nal;
+
+    /* 添加h264头 */
+    if(NULL == rsppsp)
+    {
+        return;
+    }
+    uint8_t *p_payload = NULL;
+
+    for (int i = 0; i < x264Encoder.m_x264iNal; ++i)
+    {
+        if(0x05 == x264Encoder.m_pX264Nals[i].i_type) /* I帧 */
+        {
+            p_payload = (uint8_t *)malloc(len0+x264Encoder.m_pX264Nals[i].i_payload);
+            memcpy(p_payload, rsppsp, len0);
+            memcpy(p_payload+len0, x264Encoder.m_pX264Nals[i].p_payload, x264Encoder.m_pX264Nals[i].i_payload);
+            x264Encoder.m_pX264Nals[i].p_payload = p_payload;
+            *len += len0;
+            px264Nal->i_payload += len0;
+        }
+    }
+
+    return ;
+}
+
+static unsigned int rtp_transmit(void *ptr, void *rsppsp, size_t len, size_t len0)
 {
     if(NULL == ptr)
     {
@@ -488,38 +546,42 @@ static unsigned int rtp_transmit(void *ptr, size_t len)
         return ERROR_FAILED;
     }
     int iRet = ERROR_SUCCESS;
-    
+    size_t ilen = len;
+
+    /* encode h264 again */
+    repeatencode2h264((char *)ptr, rsppsp, &ilen, len0);
+
     struct rtp_data *pdata;
-    pdata=(struct rtp_data *)malloc(sizeof(struct rtp_data));
-    memset(pdata,0,sizeof(struct rtp_data));
-    pdata->datalen = len;
-    unsigned char *rtpdata = (unsigned char*)malloc(pdata->datalen);
-    if(NULL == rtpdata)
-    {
-        perror("MppEncodeData::rtp_send");
-        return ERROR_FAILED;
-    }
-    //printf("len:%d\n", len);
-    memcpy(rtpdata, ptr, pdata->datalen);
-    pdata->buff = rtpdata;
-    pdata->bufrelen=0;
-    while((rtp=rtp_pack(pdata,&head))!=NULL)
-    {
-        /* 数据发送 */
-        printf("rtp->packlen:%d\n", rtp->packlen);
-        rtp_send(rtp,sock);
-        free(rtp);
-        rtp=NULL;
-        /* 序列号增加 */
-        head.sernum++;
-        /* usleep(500); */
-        /* printf("Send Num : %d\r\n", sendnum++); */
-    } 
-    free(pdata);
-    pdata->buff = NULL;
-    rtpdata = NULL;
+	for (int i = 0; i < x264Encoder.m_x264iNal; ++i)
+	{
+        pdata=(struct rtp_data *)malloc(sizeof(struct rtp_data));
+    	memset(pdata,0,sizeof(struct rtp_data));
+
+        pdata->datalen=x264Encoder.m_pX264Nals[i].i_payload;
+        unsigned char *rtpdata = (unsigned char *)malloc(pdata->datalen);
+        memcpy(rtpdata, x264Encoder.m_pX264Nals[i].p_payload, pdata->datalen);
+        pdata->buff=rtpdata;
+    	pdata->bufrelen=0;
+		//printf("buff len : %d\r\n", pdata->datalen);
+
+		/* 数据封包 */
+    	while((rtp=rtp_pack(pdata,&head))!=NULL)
+    	{
+        	/* 数据发送 */
+        	rtp_send(rtp,sock);
+        	free(rtp);
+        	rtp=NULL;
+        	/* 序列号增加 */
+        	head.sernum++;
+        	/* usleep(500); */
+			/* printf("Send Num : %d\r\n", sendnum++); */
+    	}
+		free(pdata);
+		pdata=NULL;
+	}
     /* 时间戳增加 */
     head.timtamp+=800;
+    /* usleep(1*1000*1000); */
 
     return iRet;
 }
@@ -593,20 +655,41 @@ bool  grb24toyuv420p(unsigned char *RgbBuf, unsigned int nWidth, unsigned int nH
     unsigned char y, u, v, r, g, b,testu,testv;  
     unsigned int ylen = nWidth * nHeight;  
     unsigned int ulen = (nWidth * nHeight)/4;  
-    unsigned int vlen = (nWidth * nHeight)/4;   
+    unsigned int vlen = (nWidth * nHeight)/4; 
+
     for (j = 0; j<nHeight;j++)  
     {  
-        bufRGB = RgbBuf + nWidth * (nHeight - 1 - j) * 3 ;  
+        /* bufRGB = RgbBuf + nWidth * (nHeight - 1 - j) * 3 ; */
+        if(0 == j)
+        {
+            bufRGB = RgbBuf + nWidth * j * 3; /* 解决倒立 */
+        }
+        else
+        {
+            bufRGB = RgbBuf + nWidth * j * 3 -1; /* 解决倒立 */
+        }
         for (i = 0;i<nWidth;i++)  
         {  
-            int pos = nWidth * i + j;  
+            /*
+            * 左右反转
+            * if(0 == i)
+            * {
+            *     bufRGB += nWidth * 3 - 1;
+            * }
+            */
             r = *(bufRGB++);  
             g = *(bufRGB++);  
-            b = *(bufRGB++);  
+            b = *(bufRGB++);
+            /*
+            * 左右反转
+            * b = *(bufRGB--);  
+            * g = *(bufRGB--);  
+            * r = *(bufRGB--);
+            */
             y = (unsigned char)( ( 66 * r + 129 * g +  25 * b + 128) >> 8) + 16  ;            
             u = (unsigned char)( ( -38 * r -  74 * g + 112 * b + 128) >> 8) + 128 ;            
             v = (unsigned char)( ( 112 * r -  94 * g -  18 * b + 128) >> 8) + 128 ;  
-            //*(bufY++) = max( 0, min(y, 255 ));  
+            /* *(bufY++) = max( 0, min(y, 255 )); */
             *(bufY++) = (y<255?y:255)<0?0:(y<255?y:255);
             if (j%2==0&&i%2 ==0)  
             {  
@@ -619,11 +702,11 @@ bool  grb24toyuv420p(unsigned char *RgbBuf, unsigned int nWidth, unsigned int nH
                     u = 0;  
                 }  
                 *(bufU++) =u;  
-                //存u分量  
+                /* 存u分量 */
             }  
             else  
             {  
-                //存v分量  
+                /* 存v分量 */
                 if (i%2==0)  
                 {  
                     if (v>255)  
@@ -658,6 +741,9 @@ MPP_RET mpp_encode(MPP_ENC_DATA_S *p, unsigned char *yuv, unsigned long len)
     }
 
     static int flag = 0;
+    static size_t len0 = 0;
+    //static char ch264spspps[45] = {0};
+    static char *pch264spspps = NULL;
 
     mpi = p->mpi;
     ctx = p->ctx;
@@ -676,14 +762,25 @@ MPP_RET mpp_encode(MPP_ENC_DATA_S *p, unsigned char *yuv, unsigned long len)
         if (packet) 
         {
             void *ptr   = mpp_packet_get_pos(packet);
-            size_t len  = mpp_packet_get_length(packet);
-
+            len0  = mpp_packet_get_length(packet);
+            pch264spspps = (char *)malloc(len0);
+            memcpy(pch264spspps, ptr, len0);
             if (p->fp_output)
-                fwrite(ptr, 1, len, p->fp_output);
+            {
+                //fwrite(ptr, 1, len, p->fp_output);
+                //fclose(p->fp_output);
+                //printf("write finished.\n");
+            }
 
             packet = NULL;
         }
         flag = 1;
+    }
+
+    if(NULL == pch264spspps)
+    {
+        printf("crash pch264spspps!!!\n");
+        return MPP_ERR_MALLOC;
     }
 
     buf =mpp_buffer_get_ptr(p->frm_buf);
@@ -704,6 +801,7 @@ MPP_RET mpp_encode(MPP_ENC_DATA_S *p, unsigned char *yuv, unsigned long len)
     mpp_frame_set_fmt(frame, p->fmt);
     mpp_frame_set_buffer(frame, p->frm_buf);
 
+    //usleep(100);
     ret = mpi->encode_put_frame(ctx, frame);
     if (ret) 
     {
@@ -724,13 +822,21 @@ MPP_RET mpp_encode(MPP_ENC_DATA_S *p, unsigned char *yuv, unsigned long len)
         void *ptr   = mpp_packet_get_pos(packet);
         size_t len  = mpp_packet_get_length(packet);
 
-        rtp_transmit(ptr, len);
+        if(0 == p->frame_count%60)
+        {
+            //fwrite(pch264spspps, 1, 45, p->fp_output);
+            rtp_transmit(ptr, pch264spspps, len, len0);
+        }
+        else
+        {
+            rtp_transmit(ptr, NULL, len, 0);
+        }
 
         if (p->fp_output)
-            fwrite(ptr, 1, len, p->fp_output);
+            //fwrite(ptr, 1, len, p->fp_output);
         mpp_packet_deinit(&packet);
 
-        printf("encoded frame %d size %d\n", p->frame_count, len);
+        //printf("encoded frame %d size %d\n", p->frame_count, len);
         p->stream_size += len;
         p->frame_count++;
     }
@@ -755,16 +861,9 @@ void encode2hardware(unsigned char *g_pImageData)
         return;
     }
     grb24toyuv420p(g_pImageData, g_pstTouPcam->inWidth, g_pstTouPcam->inHeight, pucyuvBuf, &len);
-    printf("yuv420 len:%d\n", len);
+    //printf("yuv420 len:%d\n", len);
 
-    ret = mpp_encode(g_pstmpp_enc_data, pucyuvBuf, len);
-    if (ret) 
-    {
-        printf("mpp_encode failed ret %d\n", ret);
-    }
-
-    
-/*    
+#if 0        
     FILE *fp = fopen("./mcamera.yuv", "ab+");
     if(NULL == fp)
     {
@@ -774,17 +873,14 @@ void encode2hardware(unsigned char *g_pImageData)
     }
     fwrite(pucyuvBuf, len, 1, fp);
     fclose(fp);
-*/
-/*    
-    int iflag = 0;
-    MppEncodeData mppEncodeData = MppEncodeData(sock->local, g_pstTouPcam->inHeight, g_pstTouPcam->inWidth, (unsigned char *)pucyuvBuf);
-    if(0 == iflag)
+#endif
+
+    ret = mpp_encode(g_pstmpp_enc_data, pucyuvBuf, len);
+    if (ret) 
     {
-        iflag = 1;
-        mppEncodeData.init_mpp();
+        printf("mpp_encode failed ret %d\n", ret);
     }
-    mppEncodeData.startup();
-*/
+
     free(pucyuvBuf);
     pucyuvBuf = NULL;
 

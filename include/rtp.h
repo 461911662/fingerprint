@@ -26,6 +26,7 @@
 #include <getopt.h>
 #include <netdb.h>
 #include <pthread.h>
+#include <semaphore.h>
  
 #include "Error.h"
  
@@ -39,7 +40,6 @@
  
 #define MAX_PACK_LEN (1448)
 #define RTP_HEAD_LEN (12)
- 
  
 #define H264_TYPE           (0x60)
 //rtp头 版本号设置
@@ -68,7 +68,7 @@
                              SET_RTP_TIMETAMP();\
                              SET_RTP_SSRC();\
                             }
- 
+
 //rtp头结构
 struct rtp_pack_head
 {
@@ -96,12 +96,14 @@ struct rtp_pack
     unsigned int packtype;
 };
  
- 
+
+extern pthread_mutex_t g_PthreadMutexUDP;
 //FILE *temp;
 //创建rtp头
 void creat_rtp_head(struct rtp_pack *rtp,struct rtp_pack_head *head);
 //rtp封包
 struct rtp_pack *rtp_pack(struct rtp_data *pdata,struct rtp_pack_head *head);
+struct rtp_pack *sham_rtp_pack(struct rtp_data *pdata);
 //获取264数据
 void *getdata(FILE *file);
 //rtp数据发送
