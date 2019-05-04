@@ -17,6 +17,7 @@
 #include "../include/codeimg.h"
 #include "../include/rtp.h"
 #include "../include/toupcam.h"
+#include "../include/toupcam_log.h"
 #include "../include/common_toupcam.h"
 #include "../include/mpp_encode_data.h"
 
@@ -97,11 +98,11 @@ void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx)
             hr = Toupcam_PullImageV2(g_hcam, g_pImageData, 24, &info);
             
             if (FAILED(hr))
-                printf("failed to pull image, hr = %08x\n", hr);
+                toupcam_log_f(LOG_INFO, "failed to pull image, hr = %08x\n", hr);
             else
             {                
                 /* After we get the image data, we can do anything for the data we want to do */
-                /* printf("pull image ok, total = %u, resolution = %u x %u\n", ++g_total, info.width, info.height); */
+                /* toupcam_log_f(LOG_INFO, "pull image ok, total = %u, resolution = %u x %u\n", ++g_total, info.width, info.height); */
                 if(frame_num == 0)
                 {
  #ifdef SOFT_ENCODE_H264 
@@ -118,39 +119,39 @@ void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx)
             }
             break;
         case TOUPCAM_EVENT_STILLIMAGE:
-            printf("toupcam event TOUPCAM_EVENT_STILLIMAGE(%d).\n", nEvent);
+            toupcam_log_f(LOG_INFO, "toupcam event TOUPCAM_EVENT_STILLIMAGE(%d).\n", nEvent);
             memset(g_pStaticImageData, 0, sizeof(g_pstTouPcam->m_header.biSizeImage));
             hr = Toupcam_PullStillImageV2(g_hcam, NULL, 24, &info);
             if (FAILED(hr))
-                printf("failed to pull image, hr = %08x\n", hr);
+                toupcam_log_f(LOG_INFO, "failed to pull image, hr = %08x\n", hr);
             else
             {
                 /* After we get the image data, we can do anything for the data we want to do */
-                /* printf("pull static image ok, total = %u, resolution = %u x %u\n", ++g_total, info.width, info.height); */
+                /* toupcam_log_f(LOG_INFO, "pull static image ok, total = %u, resolution = %u x %u\n", ++g_total, info.width, info.height); */
                 
                 hr = Toupcam_PullStillImage(g_hcam, g_pStaticImageData, 24, NULL, NULL);
                 if (SUCCEEDED(hr))
                 {
-                    printf("encode.\n");
+                    toupcam_log_f(LOG_INFO, "encode.\n");
                     encode_jpeg((unsigned char *)g_pStaticImageData);
                 }
                 else
                 {
-                    printf("miss static image, total = %u, resolution = %u x %u\n", ++g_total, info.width, info.height);
+                    toupcam_log_f(LOG_INFO, "miss static image, total = %u, resolution = %u x %u\n", ++g_total, info.width, info.height);
                 }
             }
             break;
         case TOUPCAM_EVENT_TEMPTINT:     /* white balance changed, Temp/Tint mode */
-            printf("toupcam event TOUPCAM_EVENT_TEMPTINT(%d).\n", nEvent);
+            toupcam_log_f(LOG_INFO, "toupcam event TOUPCAM_EVENT_TEMPTINT(%d).\n", nEvent);
             pthread_mutex_trylock(&g_pstTouPcam->stWhiteBlc.mutex);
             if(g_pstTouPcam->stWhiteBlc.iauto)
             {
                 hr = Toupcam_get_TempTint(g_pstTouPcam->m_hcam, &g_pstTouPcam->stWhiteBlc.Temp, &g_pstTouPcam->stWhiteBlc.Tint);
                 if(FAILED(hr))
                 {
-                    printf("init Temp,Tint failed!\n");
+                    toupcam_log_f(LOG_INFO, "init Temp,Tint failed!\n");
                 }
-                printf("White balance Temp:%d, Tint:%d\n", g_pstTouPcam->stWhiteBlc.Temp, g_pstTouPcam->stWhiteBlc.Tint);
+                toupcam_log_f(LOG_INFO, "White balance Temp:%d, Tint:%d\n", g_pstTouPcam->stWhiteBlc.Temp, g_pstTouPcam->stWhiteBlc.Tint);
             }
             pthread_mutex_unlock(&g_pstTouPcam->stWhiteBlc.mutex);
             break;
@@ -158,21 +159,21 @@ void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx)
             /* not support it yet */
             break;
         case TOUPCAM_EVENT_EXPOSURE:     /* exposure time changed */
-            /* printf("toupcam event TOUPCAM_EVENT_EXPOSURE(%d).\n", nEvent); */
+            /* toupcam_log_f(LOG_INFO, "toupcam event TOUPCAM_EVENT_EXPOSURE(%d).\n", nEvent); */
             if(g_pstTouPcam->OnEventExpo)
             {
                 g_pstTouPcam->OnEventExpo();
             }
             else
             {
-                printf("TOUPCAM_EVENT_EXPOSURE: not register it!!!\n");
+                toupcam_log_f(LOG_INFO, "TOUPCAM_EVENT_EXPOSURE: not register it!!!\n");
             }
             break;
         case TOUPCAM_EVENT_TRIGGERFAIL:  /* trigger failed */
         case TOUPCAM_EVENT_BLACK:        /* black balance changed */
         case TOUPCAM_EVENT_FFC:          /* flat field correction status changed */
         case TOUPCAM_EVENT_DFC:          /* dark field correction status changed */
-            //printf("toupcam event: %d\n", nEvent);
+            //toupcam_log_f(LOG_INFO, "toupcam event: %d\n", nEvent);
             break;
         case TOUPCAM_EVENT_ERROR:        /* generic error */
             *puiCallbackCtx = TOUPCAM_EVENT_ERROR;
@@ -187,7 +188,7 @@ void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx)
             *puiCallbackCtx = TOUPCAM_EVENT_FACTORY;
             break;            
         default:
-            printf("unknown event: %d\n", nEvent);
+            toupcam_log_f(LOG_INFO, "unknown event: %d\n", nEvent);
             break;
     }
 }
@@ -225,7 +226,7 @@ void *pthread_link_task1(void *argv)
     int pHistoramCtx = 0;
     TOUPCAM_COMMON_RESPON_S stToupcamRespon;
     stToupcamRespon.com.cmd = COMCMD_TOUPCAMCFG;
-    sprintf(stToupcamRespon.com.proto, "%s", "proto");
+    stoupcam_log_f(LOG_INFO, stToupcamRespon.com.proto, "%s", "proto");
     stToupcamRespon.com.proto[4] = 'o';
     stToupcamRespon.com.type = TCP_RESPONSE;
     stToupcamRespon.com.size[0] = INVAILD_BUFF_SIZE;
@@ -257,7 +258,7 @@ void *pthread_link_task1(void *argv)
         hr = Toupcam_GetHistogram(g_pstTouPcam->m_hcam, pHistramCallback, (void*)&pHistoramCtx);
         if(FAILED(hr))
         {
-            printf("get Historam data failed(%lld)\n", hr);
+            toupcam_log_f(LOG_INFO, "get Historam data failed(%lld)\n", hr);
             continue;
         }
         
@@ -288,7 +289,7 @@ void *pthread_link_task1(void *argv)
             fail("socket: %s\n", strerror(errno));
         }
         pthread_mutex_unlock(&g_PthreadMutexUDP);
-        //printf("send: sock->local:%d iLen:%d, ip:%s.\n", sock->local, iLen, inet_ntoa(sock->cliaddr[1]->sin_addr));
+        //toupcam_log_f(LOG_INFO, "send: sock->local:%d iLen:%d, ip:%s.\n", sock->local, iLen, inet_ntoa(sock->cliaddr[1]->sin_addr));
 
     }
 
@@ -323,7 +324,7 @@ void *pthread_server(void *pdata)
     socklen_t addrlen = sizeof(struct sockaddr_in);
     if(sock1->local < 0)
     {
-        printf("socket fd(%d).\n", sock1->local);
+        toupcam_log_f(LOG_INFO, "socket fd(%d).\n", sock1->local);
         return NULL;
     }
     iServerFd = sock1->local;
@@ -340,12 +341,12 @@ void *pthread_server(void *pdata)
 		iRet = select(iMaxfd+1, &tmprdfs, NULL, NULL, &tv);
 		if(iRet == 0)
 		{
-			//printf("select time out.\n");
+			//toupcam_log_f(LOG_INFO, "select time out.\n");
 			continue;
 		}
 		else if(iRet < 0)
 		{
-			//printf("select fail.\n");
+			//toupcam_log_f(LOG_INFO, "select fail.\n");
 			continue;
 		}
 		for(i = 0; i < iMaxfd+1; i++)
@@ -365,7 +366,7 @@ void *pthread_server(void *pdata)
 						iMaxfd = iClientFd;
 					}
 					FD_SET(iClientFd, &rdfs);
-					printf("tcp(%d) listen(%d)...\n", i, iClientFd);
+					toupcam_log_f(LOG_INFO, "tcp(%d) listen(%d)...\n", i, iClientFd);
                     link_task();
 				}
 				else
@@ -396,7 +397,7 @@ void *pthread_server(void *pdata)
                         
 						if(NULL == pcBuffData)
 						{
-							printf("no proto.\n");
+							toupcam_log_f(LOG_INFO, "no proto.\n");
 							FD_CLR(i, &tmprdfs);
 							continue;
 						}
@@ -405,9 +406,9 @@ void *pthread_server(void *pdata)
 						int k;
 						for(k=0; k<11; k++)
 						{
-							printf("%2x ", g_cBuffData[k]);
+							toupcam_log_f(LOG_INFO, "%2x ", g_cBuffData[k]);
 						}
-						printf("\n");
+						toupcam_log_f(LOG_INFO, "\n");
 						*/
 						memcpy(&stToupcam_common_req, pcBuffData, sizeof(TOUPCAM_COMMON_REQUES_S));
                         if(!iEndianness)
@@ -423,7 +424,7 @@ void *pthread_server(void *pdata)
 					}
                     else
                     {
-                        printf("sock unconnect...\n");
+                        toupcam_log_f(LOG_INFO, "sock unconnect...\n");
                         FD_CLR(i, &rdfs);
                         close(i);
                     }
@@ -447,14 +448,14 @@ void Destory_sock(void)
         close(sock->local);
         free(sock);
         sock = NULL;
-        printf("destory dgram sock...\n");
+        toupcam_log_f(LOG_INFO, "destory dgram sock...\n");
     }
     if(sock1)
     {
         close(sock1->local);
         free(sock1);
         sock1 = NULL;
-        printf("destory stream sock...\n");
+        toupcam_log_f(LOG_INFO, "destory stream sock...\n");
     }
     /* 异常关闭所监听的描述符 */
     int i = 0;
@@ -501,21 +502,21 @@ int init_sock(void)
     iRet = socket_dgram_init();
     if(ERROR_SUCCESS == iRet)
     {
-        printf("dgram sock init is ok.\n");
+        toupcam_log_f(LOG_INFO, "dgram sock init is ok.\n");
     }
     else
     {
-        printf("dgram sock init is not ok.\n");
+        toupcam_log_f(LOG_INFO, "dgram sock init is not ok.\n");
     }
     /* step 2 init stream */
     iRet = socket_stream_init();
     if(ERROR_SUCCESS == iRet)
     {
-        printf("stream sock init is ok.\n");
+        toupcam_log_f(LOG_INFO, "stream sock init is ok.\n");
     }
     else
     {
-        printf("stream sock init is not ok.\n");
+        toupcam_log_f(LOG_INFO, "stream sock init is not ok.\n");
     }
 
 	return iRet;
@@ -590,7 +591,13 @@ int main(int, char**)
 
     /* 初始化信号 */
     signal(SIGPIPE,signal_func);
-    
+
+    iRet = init_toupcam_log();
+    if(ERROR_FAILED == iRet)
+    {
+        goto exit0_;
+    }
+
     /* 初始化sock数据,用于wifi网络视频帧传输和控制协议传输 */
     iRet = init_sock();
     if(ERROR_FAILED == iRet)
@@ -635,7 +642,7 @@ int main(int, char**)
     {
         goto exit1_;
     }
-    printf("init Toupcam callback.\n");
+    toupcam_log_f(LOG_INFO, "init Toupcam callback.\n");
     
     /* 安装一个Toupcam摄像头设备 */
     iRet = SetupToupcam(g_pstTouPcam);
