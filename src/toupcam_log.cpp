@@ -12,10 +12,6 @@ typedef void (*toupcam_log_callback)(const char*, const char*, va_list);
 
 unsigned int toupcam_debug = 1;
 
-extern "C" {
-#ifdef __cplusplus
-#endif
-
 static const char *msg_log_warning = "log message is long\n";
 static const char *msg_log_nothing = "\n";
 
@@ -126,9 +122,6 @@ int init_toupcam_log()
 	}
 }
 
-#ifdef __cplusplus
-}
-#endif
 
 /*
 int main()

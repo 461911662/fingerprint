@@ -226,7 +226,7 @@ void *pthread_link_task1(void *argv)
     int pHistoramCtx = 0;
     TOUPCAM_COMMON_RESPON_S stToupcamRespon;
     stToupcamRespon.com.cmd = COMCMD_TOUPCAMCFG;
-    stoupcam_log_f(LOG_INFO, stToupcamRespon.com.proto, "%s", "proto");
+    sprintf(stToupcamRespon.com.proto, "%s", "proto");
     stToupcamRespon.com.proto[4] = 'o';
     stToupcamRespon.com.type = TCP_RESPONSE;
     stToupcamRespon.com.size[0] = INVAILD_BUFF_SIZE;

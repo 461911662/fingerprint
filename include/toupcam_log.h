@@ -10,6 +10,9 @@ enum LOG_LEVEL
 	LOG_ERROR = 0x04,
 };
 
+void _toupcam_err(const char *tag, int level, const char *fmt, const char *fname, ...);
+void _toupcam_log(const char *tag, int level, const char *fmt, const char *fname, ...);
+
 #define toupcam_log(level, fmt, ...) _toupcam_log(MODULE_TAG, level, fmt, NULL, ## __VA_ARGS__)
 #define toupcam_err(level, fmt, ...) _toupcam_err(MODULE_TAG, level, fmt, NULL, ## __VA_ARGS__)
 
