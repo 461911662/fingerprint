@@ -3,11 +3,12 @@
 #include "toupcam.h"
 #include "mpp_encode_data.h"
 #include "rockchip/mpp_err.h"
+#include "toupcam_log.h"
 
 #define REQUES_SIZE  (128)
 #define ARRAY_SIZE(a) sizeof(a)/sizeof(a[0])
 
-#undef SOFT_ENCODE_H264
+#define SOFT_ENCODE_H264
 
 #define END_BUFF_SIZE         (0)
 #define INVAILD_BUFF_SIZE     (1)

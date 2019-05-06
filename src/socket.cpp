@@ -126,7 +126,7 @@ unsigned int socket_stream_init()
     iRet = bind(sock1->local, (struct sockaddr *)&stSockServer, sizeof(struct sockaddr_in));
     if(ERROR_SUCCESS != iRet)
     {
-        perror("stream bind");
+        toupcam_log_f(LOG_ERROR, "%s", strerror(errno));
         return ERROR_FAILED;
     }
 

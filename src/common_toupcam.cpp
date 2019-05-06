@@ -74,7 +74,7 @@ unsigned int PreInitialDevice(void *pvoid)
 {
     if(NULL == pvoid)
     {
-        printf("%s: pvoid is null.\n", __func__);
+        toupcam_log_f(LOG_ERROR, "pvoid is null.\n");
         return ERROR_FAILED;
     }
     TOUPCAM_S *pTmpToupcam = (TOUPCAM_S *)pvoid;
@@ -84,7 +84,7 @@ unsigned int PreInitialDevice(void *pvoid)
     {
         toupcamerrinfo(hr);
     }
-    
+    int i = 0;
     hr = Toupcam_get_FwVersion(pTmpToupcam->m_hcam, pTmpToupcam->m_ins.fwver);
     if(FAILED(hr))
     {
@@ -110,14 +110,14 @@ unsigned int PreInitialDevice(void *pvoid)
     }
 
     printf("#######################################################\n");
-    printf("############ \033[40;31mlaplat camera program start \033[0m##############\n");
+    printf("#############\033[40;31mlaplat camera program start \033[0m##############\n");
     printf("#######################################################\n\n");
 
-    printf("%17s\033[40;31%s\033[0m\n", "Toupcam sn: ", pTmpToupcam->m_ins.sn[0]?pTmpToupcam->m_ins.sn:" null");
-    printf("%17s\033[40;31%s\033[0m\n", "Toupcam fwver:", pTmpToupcam->m_ins.fwver[0]?pTmpToupcam->m_ins.fwver:" null");
-    printf("%17s\033[40;31%s\033[0m\n", "Toupcam hwver:", pTmpToupcam->m_ins.hwver[0]?pTmpToupcam->m_ins.hwver:" null");
-    printf("%17s\033[40;31%s\033[0m\n", "Toupcam date:", pTmpToupcam->m_ins.pdate[0]?pTmpToupcam->m_ins.pdate:" null");
-    printf("%17s\033[40;31%d\033[0m\n", "Toupcam Revision:", pTmpToupcam->m_ins.pRevision?pTmpToupcam->m_ins.pRevision:0);
+    printf("%17s\033[40;31m%s\033[0m\n", "Toupcam sn:", pTmpToupcam->m_ins.sn[0]?pTmpToupcam->m_ins.sn:" null");
+    printf("%17s\033[40;31m%s\033[0m\n", "Toupcam fwver:", pTmpToupcam->m_ins.fwver[0]?pTmpToupcam->m_ins.fwver:" null");
+    printf("%17s\033[40;31m%s\033[0m\n", "Toupcam hwver:", pTmpToupcam->m_ins.hwver[0]?pTmpToupcam->m_ins.hwver:" null");
+    printf("%17s\033[40;31m%s\033[0m\n", "Toupcam date:", pTmpToupcam->m_ins.pdate[0]?pTmpToupcam->m_ins.pdate:" null");
+    printf("%17s\033[40;31m%d\033[0m\n", "Toupcam Revision:", pTmpToupcam->m_ins.pRevision?pTmpToupcam->m_ins.pRevision:0);
 
     if(!pTmpToupcam->m_ins.sn[0] || !pTmpToupcam->m_ins.fwver[0] || !pTmpToupcam->m_ins.hwver[0]
         || !pTmpToupcam->m_ins.pdate[0] || !pTmpToupcam->m_ins.pRevision)
@@ -137,7 +137,7 @@ unsigned int OpenDevice()
     g_hcam = Toupcam_Open(NULL);
     if(NULL == g_hcam)
     {
-        printf("no Toupcam device.\n");
+        toupcam_log_f(LOG_ERROR, "no Toupcam device.\n");
         return ERROR_FAILED;
     }
     g_pstTouPcam->m_hcam = g_hcam;
@@ -152,7 +152,7 @@ unsigned int StartDevice(void *pvoid)
 {
     if(NULL == pvoid)
     {
-        printf("%s: pvoid is null.\n", __func__);
+        toupcam_log_f(LOG_ERROR, "pvoid is null.\n");
         return ERROR_FAILED;
     }
     TOUPCAM_S *pToupcam = (TOUPCAM_S *)pvoid;
@@ -197,26 +197,33 @@ unsigned int StartDevice(void *pvoid)
 
     initX264Encoder(x264Encoder,"myCamera.h264");
 #else
+    toupcam_log_f(LOG_ERROR, "not soft_encode_h264.\n");
     init_mpp();
 #endif
-    printf("pTmpToupcam->inWidth:%d, pTmpToupcam->inHeight:%d\n", g_pstTouPcam->inWidth, g_pstTouPcam->inHeight);
-    printf("pTmpToupcam->inMaxWidth:%d, pTmpToupcam->inMaxHeight:%d\n", g_pstTouPcam->inMaxWidth, g_pstTouPcam->inMaxHeight);
+    toupcam_dbg_f(LOG_DEBUG, "pTmpToupcam->inWidth:%d, pTmpToupcam->inHeight:%d\n", g_pstTouPcam->inWidth, g_pstTouPcam->inHeight);
+    toupcam_dbg_f(LOG_DEBUG, "pTmpToupcam->inMaxWidth:%d, pTmpToupcam->inMaxHeight:%d\n", g_pstTouPcam->inMaxWidth, g_pstTouPcam->inMaxHeight);
 
     /* 开启拉模式视频 */
     iRet = Toupcam_StartPullModeWithCallback(pToupcam->m_hcam, EventCallback, &uiCallbackContext);
     if (FAILED(iRet))
     {
-        printf("failed to start camera, hr = %08x\n", iRet);
+        toupcam_log_f(LOG_ERROR, "failed to start camera, hr = %08x\n", iRet);
     }
     else if(uiCallbackContext)
     {
-        printf("Toupcam Event(%d):", uiCallbackContext);
+        toupcam_log_f(LOG_ERROR, "Toupcam Event(%d):", uiCallbackContext);
         return toupcamerrinfo(uiCallbackContext)?ERROR_FAILED:ERROR_SUCCESS;
     }
     else
     {
-        printf("press any key to exit\n");
-        getc(stdin);
+        toupcam_log_f(LOG_WARNNING, "press any B/b to exit\n");
+        while(1)
+        {
+            if('b' == getc(stdin) || 'B' == getc(stdin))
+            {
+                break;
+            }
+        }
         return ERROR_FAILED;
     }
     
@@ -231,7 +238,7 @@ unsigned int ConfigDevice(void *pvoid)
 {
     if(NULL == pvoid)
     {
-        printf("%s: pvoid is null.\n", __func__);
+        toupcam_log_f(LOG_ERROR, "pvoid is null.\n");
         return ERROR_FAILED;
     }
     TOUPCAM_S *pTmpToupcam = (TOUPCAM_S *)pvoid;
@@ -267,13 +274,13 @@ unsigned int ConfigDevice(void *pvoid)
     }
     else
     {
-        printf("%s: Toupcam get resolution number failed!\n", __func__);
+        toupcam_log_f(LOG_ERROR, "Toupcam get resolution number failed!\n");
         return ERROR_FAILED;
     }
 
     if(FAILED(iRet))
     {
-        printf("%s: Toupcam failed.\n", __func__);
+        toupcam_log_f(LOG_ERROR, "Toupcam failed.\n", __func__);
         return ERROR_FAILED;
     }
 
@@ -285,12 +292,16 @@ unsigned int ConfigDevice(void *pvoid)
     }
 
     /* 白平衡设置 */
+/*
+* 白平衡只能在相机启动后push/pull使用
+*
     iRet = Set_WhiteBalanceToupcam();
     if(ERROR_FAILED == iRet)
     {
         return ERROR_FAILED;
     }
-   
+*/
+
     /* 颜色设置 */
     iRet = Set_ColorToupcam();
     if(ERROR_FAILED == iRet)
@@ -299,21 +310,23 @@ unsigned int ConfigDevice(void *pvoid)
     }
 
     /* 帧率设置 */
-    g_pstTouPcam->iFrameRate = 30;
+    g_pstTouPcam->iFrameRate = 10;
     iRet = Toupcam_put_Option(g_pstTouPcam->m_hcam, TOUPCAM_OPTION_FRAMERATE, g_pstTouPcam->iFrameRate);
     if(FAILED(iRet))
     {
-        printf("%s: set frame rate failed.\n", __func__);
+        toupcam_log_f(LOG_ERROR, "set frame rate failed.\n");
         return ERROR_FAILED;
     }
+    toupcam_dbg_f(LOG_DEBUG, "get frame rate:%d.", g_pstTouPcam->iFrameRate);
 
     /* 色彩模式设置 */
     iRet = Toupcam_get_Chrome(g_pstTouPcam->m_hcam, &g_pstTouPcam->m_color);
     if(FAILED(iRet))
     {
-        printf("%s: get chrome failed.\n", __func__);
+        toupcam_log_f(LOG_ERROR, "get chrome failed.\n");
         return ERROR_FAILED;
     }
+    toupcam_dbg_f(LOG_DEBUG, "get chrome:%s.", g_pstTouPcam->m_color?"color":"gray");
   
     /* 翻转设置 */
     iRet = Set_ToupcamOrientation();
@@ -323,28 +336,32 @@ unsigned int ConfigDevice(void *pvoid)
     }
 
     /* 采样方式设置 */
+    /*
     iRet = Toupcam_get_Mode(g_pstTouPcam->m_hcam, &g_pstTouPcam->m_sample);
     if(FAILED(iRet))
     {
-        printf("%s: get sample failed.\n", __func__);
+        toupcam_log_f(LOG_ERROR, "get sample failed.\n");
         //return ERROR_FAILED;
     }
+    toupcam_dbg_f(LOG_DEBUG, "get sample:%s.", g_pstTouPcam->m_sample?"skip":"bin");
+    */
 
     /* 光源频率设置 */
     iRet = Toupcam_get_HZ(g_pstTouPcam->m_hcam, &g_pstTouPcam->m_nHz);
     if(FAILED(iRet))
     {
-        printf("%s: get power source Hz failed.\n", __func__);
+        toupcam_log_f(LOG_ERROR, "get power source Hz failed.\n");
         return ERROR_FAILED;
     }
+    toupcam_dbg_f(LOG_DEBUG, "power source :%s.", g_pstTouPcam->m_nHz?(g_pstTouPcam->m_nHz == 1?"50Hz":"direct-currnet"):"60Hz");
 
     /* 初始化toupcam Button */
     iRet = init_Toupcam_button();
     if(FAILED(iRet))
     {
-        printf("%s: get power source Hz failed.\n", __func__);
+        toupcam_log_f(LOG_ERROR, "init button failed.\n");
         return ERROR_FAILED;
-    }    
+    } 
     
     return ERROR_SUCCESS;
 
@@ -358,7 +375,7 @@ unsigned int CloseDevice(void *pvoid)
 {
     if(NULL == pvoid)
     {
-        printf("%s: pvoid is null.\n", __func__);
+        toupcam_log_f(LOG_ERROR, "pvoid is null.\n");
         return ERROR_FAILED;
     }
     TOUPCAM_S *pTmpToupcam = (TOUPCAM_S *)pvoid;
@@ -472,97 +489,6 @@ int setToupcamDefaultCfg()
     
 }
 
-#if 0
-/*
-* 在系统上安装一个摄像头
-*/
-unsigned int SetupToupcam(TOUPCAM_S* pToupcam)
-{
-    int iRet = ERROR_SUCCESS;
-    unsigned int uiCallbackContext = 0;
-    if(NULL == pToupcam)
-    {
-        printf("%s: pTmpToupcam is null.\n", __func__);
-        return ERROR_FAILED;
-    }
-
-    /* 打开Toupcam设备 */
-    iRet = pToupcam->OpenDevice(pToupcam);
-    if(ERROR_FAILED == iRet)
-    {
-        return ERROR_FAILED;
-    }
-
-    /* 设置Toupcam分辨率 */
-    iRet = pToupcam->PreInitialDevice(pToupcam);
-    if(ERROR_FAILED == iRet)
-    {
-        return ERROR_FAILED;
-    }
-
-    /* 申请足够大的数据Buffer1 preview         */
-    if(pToupcam->m_header.biSizeImage > 0)
-    {
-        if(NULL == g_pImageData)
-        {
-            free(g_pImageData);
-            g_pImageData = NULL;
-        }
-        g_pImageData = malloc(pToupcam->m_header.biSizeImage);
-        if(NULL == g_pImageData)
-        {
-            perror("SetupToupcam g_pImageData");
-            return ERROR_FAILED;
-        }
-    }
-    pToupcam->m_pImageData = g_pImageData;
-
-    /* buffer2 static picture */
-    if(pToupcam->iSnapSize > 0)
-    {
-        if(NULL == g_pStaticImageData)
-        {
-            free(g_pStaticImageData);
-            g_pStaticImageData = NULL;
-        }
-        g_pStaticImageData = malloc(pToupcam->iSnapSize);
-        if(NULL == g_pStaticImageData)
-        {
-            perror("SetupToupcam g_pStaticImageData");
-            return ERROR_FAILED;
-        }
-    }
-    pToupcam->m_PStaticImageData = g_pStaticImageData;
-
-    av_register_all();
-
-    initX264Encoder(x264Encoder,"myCamera.h264");
-
-    printf("pTmpToupcam->inWidth:%d, pTmpToupcam->inHeight:%d\n", g_pstTouPcam->inWidth, g_pstTouPcam->inHeight);
-    printf("pTmpToupcam->inMaxWidth:%d, pTmpToupcam->inMaxHeight:%d\n", g_pstTouPcam->inMaxWidth, g_pstTouPcam->inMaxHeight);
-
-    /* 开启拉模式视频 */
-    iRet = Toupcam_StartPullModeWithCallback(pToupcam->m_hcam, EventCallback, &uiCallbackContext);
-    if (FAILED(iRet))
-    {
-        printf("failed to start camera, hr = %08x\n", iRet);
-    }
-    else if(uiCallbackContext)
-    {
-        printf("Toupcam Event(%d):", uiCallbackContext);
-        return toupcamerrinfo(uiCallbackContext)?ERROR_FAILED:ERROR_SUCCESS;
-    }
-    else
-    {
-        printf("press any key to exit\n");
-        getc(stdin);
-        return ERROR_FAILED;
-    }
-    
-    return ERROR_SUCCESS;
-}
-#endif
-
 /*
 * 设置Toupcam曝光参数为自动
 */
@@ -570,7 +496,7 @@ static unsigned int SetAutoExpo_Toupcam()
 {
     if(NULL == g_pstTouPcam->m_hcam)
     {
-        printf("%s: m_hcam is null.\n", __func__);
+        toupcam_log_f(LOG_ERROR, "m_hcam is null.\n");
         return ERROR_FAILED;
     }
 
@@ -583,16 +509,18 @@ static unsigned int SetAutoExpo_Toupcam()
     {
         g_pstTouPcam->stTexpo.bAutoExposure = 1;
         Toupcam_put_AutoExpoEnable(g_pstTouPcam->m_hcam, g_pstTouPcam->stTexpo.bAutoExposure);
-        printf("auto expo is enable.\n");
     }
+    toupcam_dbg_f(LOG_DEBUG, "auto expo is %s.\n", g_pstTouPcam->stTexpo.bAutoExposure?"enable":"disable");
 
     Toupcam_get_AutoExpoTarget(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.AutoTarget);
+
     if(120 != g_pstTouPcam->stTexpo.AutoTarget) /* default expo 120 */
     {
         g_pstTouPcam->stTexpo.AutoTarget = 120;
         Toupcam_put_AutoExpoTarget(g_pstTouPcam->m_hcam, g_pstTouPcam->stTexpo.AutoTarget);
-        printf("auto expo target is %d.\n", g_pstTouPcam->stTexpo.AutoTarget);
     }
+
+    toupcam_dbg_f(LOG_DEBUG, "auto expo target is %d.\n", g_pstTouPcam->stTexpo.AutoTarget);
 
     /*Toupcam_put_MaxAutoExpoTimeAGain();*/
     Toupcam_get_MaxAutoExpoTimeAGain(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.AutoMaxTime, &g_pstTouPcam->stTexpo.AutoMaxAGain);
@@ -604,12 +532,12 @@ static unsigned int SetAutoExpo_Toupcam()
     
     pthread_mutex_unlock(&g_pstTouPcam->stTexpo.mutex);
 
-    printf("expo param:\n");
-    printf("cur expo real time:%u.\n", g_pstTouPcam->stTexpo.Time);
-    printf("cur max expo time Min:%u,Max:%u,Def:%u.\n", g_pstTouPcam->stTexpo.nMin, g_pstTouPcam->stTexpo.nMax, g_pstTouPcam->stTexpo.nDef);
-    printf("cur expo AGain:%d\n", g_pstTouPcam->stTexpo.AGain);
-    printf("cur max expo Value AMin:%u,AMax:%u,ADef:%u.\n", g_pstTouPcam->stTexpo.AnMin, g_pstTouPcam->stTexpo.AnMax, g_pstTouPcam->stTexpo.AnDef);
-    printf("cur max expo time:%u, max AGain time:%us.\n", g_pstTouPcam->stTexpo.AutoMaxTime, g_pstTouPcam->stTexpo.AutoMaxAGain);
+    toupcam_dbg_f(LOG_DEBUG, "expo param:\n");
+    toupcam_dbg_f(LOG_DEBUG, "cur expo real time:%uus.\n", g_pstTouPcam->stTexpo.Time);
+    toupcam_dbg_f(LOG_DEBUG, "cur max expo time Min:%uus,Max:%uus,Def:%uus.\n", g_pstTouPcam->stTexpo.nMin, g_pstTouPcam->stTexpo.nMax, g_pstTouPcam->stTexpo.nDef);
+    toupcam_dbg_f(LOG_DEBUG, "cur expo AGain:%d.\n", g_pstTouPcam->stTexpo.AGain);
+    toupcam_dbg_f(LOG_DEBUG, "cur max expo Value AMin:%u,AMax:%u,ADef:%u.\n", g_pstTouPcam->stTexpo.AnMin, g_pstTouPcam->stTexpo.AnMax, g_pstTouPcam->stTexpo.AnDef);
+    toupcam_dbg_f(LOG_DEBUG, "cur max expo time:%u, max AGain time:%u.\n", g_pstTouPcam->stTexpo.AutoMaxTime, g_pstTouPcam->stTexpo.AutoMaxAGain);
     
     return ERROR_SUCCESS;
 }
@@ -621,7 +549,7 @@ static unsigned int Set_WhiteBalanceToupcam()
 {
     if(NULL == g_pstTouPcam)
     {
-        printf("%s: g_pstToupcam is null\n", __func__);
+        toupcam_log_f(LOG_ERROR, "g_pstToupcam is null\n");
         return ERROR_FAILED;
     }
     HRESULT hr = 0;
@@ -633,7 +561,7 @@ static unsigned int Set_WhiteBalanceToupcam()
     hr = Toupcam_AwbOnePush(g_pstTouPcam->m_hcam, fnTTProc, (void *)&iTTCtx);
     if(FAILED(hr))
     {
-        printf("set white balance fnTTProc failed!\n");
+        toupcam_log_f(LOG_ERROR, "set white balance fnTTProc failed!\n");
         //return ERROR_FAILED;
     }
 
@@ -646,11 +574,11 @@ static unsigned int Set_WhiteBalanceToupcam()
     hr = Toupcam_get_TempTint(g_pstTouPcam->m_hcam, &g_pstTouPcam->stWhiteBlc.Temp, &g_pstTouPcam->stWhiteBlc.Tint);
     if(FAILED(hr))
     {
-        printf("init Temp,Tint failed!\n");
+        toupcam_log_f(LOG_ERROR, "init Temp,Tint failed!\n");
         pthread_mutex_unlock(&g_pstTouPcam->stWhiteBlc.mutex);
         //return ERROR_FAILED;
     }
-    printf("White balance Temp:%d, Tint:%d\n", g_pstTouPcam->stWhiteBlc.Temp, g_pstTouPcam->stWhiteBlc.Tint);
+    toupcam_dbg_f(LOG_DEBUG, "White balance Temp:%d, Tint:%d\n", g_pstTouPcam->stWhiteBlc.Temp, g_pstTouPcam->stWhiteBlc.Tint);
     pthread_mutex_unlock(&g_pstTouPcam->stWhiteBlc.mutex);
 
     return ERROR_SUCCESS;
@@ -663,31 +591,54 @@ static unsigned int Set_ColorToupcam()
 {
     if(NULL == g_pstTouPcam)
     {
-        printf("%s: g_pstToupcam is null\n", __func__);
+        toupcam_log_f(LOG_ERROR, "g_pstToupcam is null\n");
         return ERROR_FAILED;
     }
     /*初始化自动曝光锁*/
     pthread_mutex_init(&g_pstTouPcam->stTcolor.mutex, NULL);
     pthread_mutex_lock(&g_pstTouPcam->stTcolor.mutex);
     g_pstTouPcam->stTcolor.Contrast = 0;
-    HRESULT hr = Toupcam_put_Contrast(g_pstTouPcam->m_hcam, g_pstTouPcam->stTcolor.Contrast);
+    HRESULT hr;
+    hr = Toupcam_get_Contrast(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTcolor.Contrast);
     if(FAILED(hr))
     {
-        printf("init Color failed!\n");
+        toupcam_log_f(LOG_ERROR, "get Contrast failed!\n");
         pthread_mutex_unlock(&g_pstTouPcam->stTcolor.mutex);
         return ERROR_FAILED;
     }
-    printf("Toupcam get Contrast:%d\n", g_pstTouPcam->stTcolor.Contrast);
+
+    if(0 != g_pstTouPcam->stTcolor.Contrast)
+    {
+        hr = Toupcam_put_Contrast(g_pstTouPcam->m_hcam, g_pstTouPcam->stTcolor.Contrast);
+        if(FAILED(hr))
+        {
+            toupcam_log_f(LOG_ERROR, "put Contrast failed!\n");
+            pthread_mutex_unlock(&g_pstTouPcam->stTcolor.mutex);
+            return ERROR_FAILED;
+        }
+    }
+    toupcam_dbg_f(LOG_DEBUG, "Toupcam get Contrast:%d.\n", g_pstTouPcam->stTcolor.Contrast);
 
     g_pstTouPcam->stTcolor.Gamma = 100;
-    hr = Toupcam_put_Gamma(g_pstTouPcam->m_hcam, g_pstTouPcam->stTcolor.Gamma);
+    hr = Toupcam_get_Gamma(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTcolor.Gamma);
     if(FAILED(hr))
     {
-        printf("init Color failed!\n");
+        toupcam_log_f(LOG_ERROR, "get Gamma failed!\n");
         pthread_mutex_unlock(&g_pstTouPcam->stTcolor.mutex);
         return ERROR_FAILED;
-    }    
-    printf("Toupcam get Gamma:%d\n", g_pstTouPcam->stTcolor.Gamma);
+    }
+    
+    if(100 != g_pstTouPcam->stTcolor.Gamma)
+    {
+        hr = Toupcam_put_Gamma(g_pstTouPcam->m_hcam, g_pstTouPcam->stTcolor.Gamma);
+        if(FAILED(hr))
+        {
+            toupcam_log_f(LOG_ERROR, "init Gamma failed!\n");
+            pthread_mutex_unlock(&g_pstTouPcam->stTcolor.mutex);
+            return ERROR_FAILED;
+        }
+    }
+    toupcam_dbg_f(LOG_DEBUG, "Toupcam get Gamma:%d.\n", g_pstTouPcam->stTcolor.Gamma);
 
     pthread_mutex_unlock(&g_pstTouPcam->stTcolor.mutex);
     return ERROR_SUCCESS;
@@ -700,7 +651,7 @@ static unsigned int Set_ToupcamOrientation()
 {
     if(NULL == g_pstTouPcam)
     {
-        printf("%s: g_pstToupcam is null\n", __func__);
+        toupcam_log_f(LOG_ERROR, "g_pstToupcam is null\n");
         return ERROR_FAILED;
     }
     /*
@@ -713,24 +664,24 @@ static unsigned int Set_ToupcamOrientation()
     HRESULT hr = Toupcam_get_VFlip(g_pstTouPcam->m_hcam, &g_pstTouPcam->iVFlip);
     if(FAILED(hr))
     {
-        printf("init vFlip failed!\n");
+        toupcam_log_f(LOG_ERROR, "init vFlip failed!\n");
         return ERROR_FAILED;
     }
-    printf("Toupcam VFlip picture:%s\n", g_pstTouPcam->iVFlip?"negative":"positive");
+    toupcam_dbg_f(LOG_DEBUG, "Toupcam VFlip picture:%s\n", g_pstTouPcam->iVFlip?"negative":"positive");
 
     hr = Toupcam_put_HFlip(g_pstTouPcam->m_hcam, 1);
     if(FAILED(hr))
     {
-        printf("init Hflip failed!\n");
+        toupcam_log_f(LOG_ERROR, "init Hflip failed!\n");
         return ERROR_FAILED;
     }    
     hr = Toupcam_get_HFlip(g_pstTouPcam->m_hcam, &g_pstTouPcam->iHFlip);
     if(FAILED(hr))
     {
-        printf("init Hflip failed!\n");
+        toupcam_log_f(LOG_ERROR, "init Hflip failed!\n");
         return ERROR_FAILED;
     }
-    printf("Toupcam HFlip picture:%s\n", g_pstTouPcam->iHFlip?"positive":"negative");
+    toupcam_dbg_f(LOG_DEBUG, "Toupcam HFlip picture:%s\n", g_pstTouPcam->iHFlip?"positive":"negative");
 
     g_pstTouPcam->iVFlip = 0;
     g_pstTouPcam->iHFlip = 0;
@@ -740,7 +691,7 @@ static unsigned int Set_ToupcamOrientation()
     hr = Toupcam_put_Option(g_pstTouPcam->m_hcam, TOUPCAM_OPTION_UPSIDE_DOWN, 0);
     if(FAILED(hr))
     {
-        printf("%s: set frame rate failed.\n", __func__);
+        toupcam_log_f(LOG_ERROR, "set frame rate failed.\n");
         return ERROR_FAILED;
     }
 
@@ -758,10 +709,10 @@ static unsigned int Set_ToupcamOrientation()
 */
 static int init_Toupcam_button()
 {
-    g_pstTouPcam->stTexpo.bAutoExposure = 0;
-    g_pstTouPcam->stTexpo.bAutoAGain = 1;
-    g_pstTouPcam->stTcolor.bAutoColor = 1;
-    g_pstTouPcam->stHistoram.bAutoHis = 1;
+    g_pstTouPcam->stTexpo.bAutoExposure = 1;
+    g_pstTouPcam->stTexpo.bAutoAGain = 0;
+    g_pstTouPcam->stTcolor.bAutoColor = 0;
+    g_pstTouPcam->stHistoram.bAutoHis = 0;
     return ERROR_SUCCESS;
 }
 
@@ -794,7 +745,7 @@ int fillresponheader(TOUPCAM_COMMON_RESPON_S *respon)
 {
     if(NULL == respon)
     {
-        printf("%s: input is invaild.\n", __func__);
+        toupcam_log_f(LOG_ERROR, "input is invaild.\n");
         return ERROR_FAILED;
     }
     respon->com.cmd = COMCMD_TOUPCAMCFG;

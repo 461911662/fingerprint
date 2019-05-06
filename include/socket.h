@@ -2,12 +2,12 @@
 #define _SOCKET_H_
 
 /* sock ip */
-#if TOUPCAM_RELEASE
+#ifdef TOUPCAM_RELEASE
 #define SERVER_IP   "192.168.1.100" /* stream sock1 default */
 #define CLIENT_IP   "192.168.1.100" /* dgram sock default */
 #else
-#define SERVER_IP   "192.168.1.106" /* stream sock1 default */
-#define CLIENT_IP   "192.168.1.102" /* dgram sock default */
+#define SERVER_IP   "192.168.100.1" /* stream sock1 default */
+#define CLIENT_IP   "192.168.100.102" /* dgram sock default */
 #endif
 
 #define UDP_PORT1  5004

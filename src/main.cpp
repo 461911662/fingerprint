@@ -8,6 +8,7 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <signal.h>
+#include <errno.h>
 #include <semaphore.h>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -84,6 +85,89 @@ union {
 void signal_func(int event) { 
 }
 
+void timer_handler(int signo)
+{
+    static char c = '\\';
+    if('\\' == c)
+    {
+        c = '|';
+    }
+    else if('/' == c)
+    {
+        c = '\\';
+    }
+    else if('|' == c)
+    {
+        c = '/';
+    }
+    
+    printf("\b\b\b\b\b\b\b\b\033[40;32mfps:%02d%c\033[0m\n", frame_num, c);
+    frame_num = 0;
+    return ;
+}
+
+int init_sigaction_timer(void)
+{
+    int iRet = ERROR_SUCCESS;
+
+    /* 初始化型号处理函数 */
+    struct sigaction stNewAction;
+    stNewAction.sa_handler = timer_handler;
+    stNewAction.sa_flags = 0;
+    sigemptyset(&stNewAction.sa_mask);
+    iRet = sigaction(SIGALRM, &stNewAction, NULL);
+    if(ERROR_SUCCESS != iRet)
+    {
+        toupcam_log_f(LOG_ERROR, "%s", strerror(errno));
+        iRet = ERROR_FAILED;
+        goto exit0_;
+    }
+
+    /* 初始化定时器 */
+    struct itimerval stValue;
+    stValue.it_value.tv_sec = 5;
+    stValue.it_value.tv_usec = 0;
+    struct itimerval stNextValue;
+    stNextValue.it_value.tv_sec = 1;
+    stNextValue.it_value.tv_usec = 0;    
+    stValue.it_interval = stNextValue.it_value;
+    iRet = setitimer(ITIMER_REAL, &stValue, NULL);
+    if(ERROR_SUCCESS != iRet)
+    {
+        toupcam_log_f(LOG_ERROR, "%s", strerror(errno));
+        iRet = ERROR_FAILED;
+        goto exit0_;
+    }    
+
+exit0_:
+
+    return iRet;
+}
+
+int init_signals(void)
+{
+    int iRet = ERROR_SUCCESS;
+
+    if(SIG_ERR == signal(SIGPIPE,signal_func))
+    {
+        toupcam_log_f(LOG_ERROR, "%s", strerror(errno));
+        iRet = ERROR_FAILED;
+        goto exit0_;
+    }
+
+    iRet = init_sigaction_timer();
+    if(ERROR_SUCCESS != iRet)
+    {
+        iRet = ERROR_FAILED;
+        goto exit0_;
+    }    
+
+exit0_:
+
+    return iRet;       
+}
+
+
 void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx)
 {
     HRESULT hr;
@@ -103,19 +187,12 @@ void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx)
             {                
                 /* After we get the image data, we can do anything for the data we want to do */
                 /* toupcam_log_f(LOG_INFO, "pull image ok, total = %u, resolution = %u x %u\n", ++g_total, info.width, info.height); */
-                if(frame_num == 0)
-                {
- #ifdef SOFT_ENCODE_H264 
-                    encode_yuv((unsigned char *)g_pImageData);
+#ifdef SOFT_ENCODE_H264 
+                encode_yuv((unsigned char *)g_pImageData);
 #else
-                    encode2hardware((unsigned char *)g_pImageData);
+                encode2hardware((unsigned char *)g_pImageData);
 #endif
-
-                    frame_num = 0;
-                }else
-                {
-                    frame_num++;
-                }
+                frame_num++;
             }
             break;
         case TOUPCAM_EVENT_STILLIMAGE:
@@ -524,7 +601,7 @@ int init_sock(void)
 
 void semaphore_inits(void)
 {
-    sem_init(&g_SemaphoreHistoram, 0, 0);
+    sem_init(&g_SemaphoreHistoram, 0, 1);
     return;
 }
 
@@ -589,9 +666,6 @@ int main(int, char**)
     int iPthredArg = 0;
     int iRet = 0;
 
-    /* 初始化信号 */
-    signal(SIGPIPE,signal_func);
-
     iRet = init_toupcam_log();
     if(ERROR_FAILED == iRet)
     {
@@ -624,6 +698,13 @@ int main(int, char**)
 
 	/* toupcam health's monitor thread */
     iRet += pthread_create(&g_PthreadId[1], NULL, pthread_health_monitor, (void *)&iPthredArg);
+    if(ERROR_FAILED == iRet)
+    {
+        goto exit0_;
+    }
+
+    /* 初始化信号 */
+    iRet = init_signals();
     if(ERROR_FAILED == iRet)
     {
         goto exit0_;

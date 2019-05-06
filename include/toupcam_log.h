@@ -4,10 +4,11 @@
 
 enum LOG_LEVEL
 {
-	LOG_DEBUG,
+	LOG_FIRST,
 	LOG_INFO = 0x01,
 	LOG_WARNNING = 0x02,
 	LOG_ERROR = 0x04,
+	LOG_DEBUG = 0x08,
 };
 
 void _toupcam_err(const char *tag, int level, const char *fmt, const char *fname, ...);

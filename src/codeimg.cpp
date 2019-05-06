@@ -18,7 +18,7 @@ extern "C"
 
 extern MPP_ENC_DATA_S *g_pstmpp_enc_data;
 
-#define VENC_FPS 30
+#define VENC_FPS 10
 #define JPEG_COMPRESS_QUILITY    (100)
 
 void encode_yuv(unsigned char *g_pImageData);
