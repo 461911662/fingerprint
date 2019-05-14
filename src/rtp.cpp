@@ -269,12 +269,10 @@ char rtp_send(struct rtp_pack *rtp,struct sockets *sock)
 {
     int num=0;
     /* 通过网络将数据发送出去 */
-    pthread_mutex_lock(&g_PthreadMutexUDP);
     if((num=sendto(sock->local,rtp->databuff,rtp->packlen,0,(struct sockaddr *)sock->cliaddr[0],sizeof(struct sockaddr_in)))==-1)
     {
         fail("socket: %s\n", strerror(errno));
     }
-    pthread_mutex_unlock(&g_PthreadMutexUDP);
     unsigned char datartp[rtp->packlen];
     /*
     memcpy(datartp, rtp->databuff, rtp->packlen);

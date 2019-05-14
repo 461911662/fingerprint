@@ -1,4 +1,5 @@
 #include "../include/toupcam_log.h"
+#include "../include/common_toupcam.h"
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -7,6 +8,7 @@
 
 #define TOUPCAM_LOG_MAX_LEN 256
 #define LINE_SZ 1024
+#undef MODULE_TAG
 #define MODULE_TAG "toupcam"
 typedef void (*toupcam_log_callback)(const char*, const char*, va_list);
 
@@ -115,11 +117,15 @@ void _toupcam_err(const char *tag, int level, const char *fmt, const char *fname
 int init_toupcam_log()
 {
 	//toupcam_debug
+	int iRet = ERROR_SUCCESS;
 	char *pcvalue = secure_getenv("toupcam_debug");
 	if(NULL != pcvalue)
 	{
 		toupcam_debug = strtol(pcvalue, NULL, 10);
 	}
+
+exit0:
+	return iRet;
 }
 
 

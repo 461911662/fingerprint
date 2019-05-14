@@ -52,6 +52,7 @@ int g_pStaticImageDataFlag = 0; /* 检测静态图片是否捕获完成 */
 unsigned g_total = 0;
 
 int frame_num = 0;
+int frame_size = 0;
 int nWidth = 0, nHeight = 0;
 int WIDTH = 0, HEIGHT = 0;
 
@@ -88,6 +89,8 @@ void signal_func(int event) {
 void timer_handler(int signo)
 {
     static char c = '\\';
+	double dSize = 0;
+	char cmb = 'k';
     if('\\' == c)
     {
         c = '|';
@@ -100,8 +103,21 @@ void timer_handler(int signo)
     {
         c = '/';
     }
-    
-    printf("\b\b\b\b\b\b\b\b\033[40;32mfps:%02d%c\033[0m\n", frame_num, c);
+   	if(frame_size > 0)
+    {
+        pthread_mutex_trylock(&g_PthreadMutexUDP);
+        dSize = (double)frame_size;
+		cmb = frame_size > 1024*1024*1024?'G':
+			  frame_size >      1024*1024?'M':
+			  frame_size >           1024?'K':'B';
+
+        dSize = frame_size > 1024*1024*1024?frame_size/(1024*1024*1024):
+			    frame_size >      1024*1024?frame_size/(1024*1024):
+			    frame_size >           1024?frame_size/(1024):frame_size;
+        printf("\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\033[40;32mfps:   size:        \033[0m\n");
+        printf("\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\033[40;32mfps:%02d size:%03.2lf%c%c\033[0m\n", frame_num, dSize, cmb, c);
+        pthread_mutex_unlock(&g_PthreadMutexUDP);
+    }
     frame_num = 0;
     return ;
 }
@@ -319,7 +335,7 @@ void *pthread_link_task1(void *argv)
     char *pcfinger = NULL;
     if(NULL == pcdes)
     {
-        perror("pthread_link_task1");
+        toupcam_log_f(LOG_ERROR, "%s.", strerror(errno));
         return NULL;
     }
 
@@ -360,13 +376,14 @@ void *pthread_link_task1(void *argv)
 
         iLen = sizeof(g_pstTouPcam->stHistoram.aHistY)*4+TOUPCAM_COMMON_RESPON_HEADER_SIZE;
 
-        pthread_mutex_lock(&g_PthreadMutexUDP);
+        /* pthread_mutex_lock(&g_PthreadMutexUDP); */
         if((iNum=sendto(sock->local, pcdes, iLen, 0, (struct sockaddr *)sock->cliaddr[1], sizeof(struct sockaddr_in)))==-1)
         {
             fail("socket: %s\n", strerror(errno));
         }
-        pthread_mutex_unlock(&g_PthreadMutexUDP);
-        //toupcam_log_f(LOG_INFO, "send: sock->local:%d iLen:%d, ip:%s.\n", sock->local, iLen, inet_ntoa(sock->cliaddr[1]->sin_addr));
+        /* pthread_mutex_unlock(&g_PthreadMutexUDP); */
+
+        toupcam_dbg_f(LOG_DEBUG, "send: sock->local:%d iLen:%d, ip:%s.\n", sock->local, iLen, inet_ntoa(sock->cliaddr[1]->sin_addr));
 
     }
 
@@ -423,7 +440,7 @@ void *pthread_server(void *pdata)
 		}
 		else if(iRet < 0)
 		{
-			//toupcam_log_f(LOG_INFO, "select fail.\n");
+			toupcam_log_f(LOG_INFO, "select fail.\n");
 			continue;
 		}
 		for(i = 0; i < iMaxfd+1; i++)
@@ -435,7 +452,7 @@ void *pthread_server(void *pdata)
 					iClientFd = accept(iServerFd, &stClientaddr, &addrlen);
 					if(iClientFd < 0)
 					{
-						perror("stream accept");
+						toupcam_log_f(LOG_ERROR, "%s.\n", strerror(errno));
 						continue;
 					}
 					if(iClientFd > iMaxfd)

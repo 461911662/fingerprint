@@ -601,6 +601,8 @@ void encoderImg(X264Encoder &x264Encoder,AVFrame *frame)
 		return;
 	}
 
+	pthread_mutex_lock(&g_PthreadMutexUDP);
+	frame_size = 0;
     struct rtp_data *pdata;
 	for (int i = 0; i < x264Encoder.m_x264iNal; ++i)
 	{
@@ -608,6 +610,7 @@ void encoderImg(X264Encoder &x264Encoder,AVFrame *frame)
     	memset(pdata,0,sizeof(struct rtp_data));
 
         pdata->datalen=x264Encoder.m_pX264Nals[i].i_payload;
+		frame_size += pdata->datalen;
         unsigned char *rtpdata = (unsigned char *)malloc(pdata->datalen);
         memcpy(rtpdata, x264Encoder.m_pX264Nals[i].p_payload, pdata->datalen);
         pdata->buff=rtpdata;
@@ -631,7 +634,7 @@ void encoderImg(X264Encoder &x264Encoder,AVFrame *frame)
 	}
     /* 时间戳增加 */
     head.timtamp+=800;
-    /* usleep(1*1000*1000); */
+    pthread_mutex_unlock(&g_PthreadMutexUDP);
 }
 
 static void convertFrameToX264Img(x264_image_t *x264InImg,AVFrame *pFrameYUV)
