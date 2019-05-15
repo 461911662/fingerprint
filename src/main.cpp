@@ -734,22 +734,6 @@ int main(int, char**)
         goto exit1_;
     }
 
-#if 0    
-    iRet = init_Toupcam();
-    if(ERROR_FAILED == iRet)
-    {
-        goto exit1_;
-    }
-    toupcam_log_f(LOG_INFO, "init Toupcam callback.\n");
-    
-    /* 安装一个Toupcam摄像头设备 */
-    iRet = SetupToupcam(g_pstTouPcam);
-    if(ERROR_FAILED == iRet)
-    {
-        goto exit1_;
-    }
-#endif
-
     pthread_mutex_destroys();
 
 #ifndef SOFT_ENCODE_H264

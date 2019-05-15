@@ -18,7 +18,8 @@ extern "C"
 
 extern MPP_ENC_DATA_S *g_pstmpp_enc_data;
 
-#define VENC_FPS 10
+#define VENC_FPS 10 /* 控制帧率 */
+#define M_BITRATE (2*1024*1024)  /* 控制码流 */
 #define JPEG_COMPRESS_QUILITY    (100)
 
 void encode_yuv(unsigned char *g_pImageData);
@@ -30,6 +31,67 @@ static void convertFrameToX264Img(x264_image_t *x264InImg,AVFrame *pFrameYUV);
 
 void initX264Encoder(X264Encoder &px264Encoder, const char *filePath)
 {
+    x264Encoder.m_x264Fp = fopen(filePath, "wb");
+
+    x264Encoder.m_pX264Param = (x264_param_t *)malloc(sizeof(x264_param_t));
+    if(NULL == x264Encoder.m_pX264Param)
+    {
+        toupcam_log_f(LOG_ERROR, "%s", strerror(errno));
+        exit(1);
+    }
+	x264_param_default(x264Encoder.m_pX264Param);
+
+    /* 0.编码延时 */
+    x264_param_default_preset(x264Encoder.m_pX264Param, "ultrafast" , "zerolatency" );
+
+    /* 1.初始化profile */
+    x264_param_apply_profile(x264Encoder.m_pX264Param, "baseline");
+
+    /* 2.threads设置 */
+    x264Encoder.m_pX264Param->i_threads = X264_THREADS_AUTO;/* X264_SYNC_LOOKAHEAD_AUTO;  取空缓冲区继续使用不死锁的保证 */
+
+    /* 3.视频选项大小 */
+    x264Encoder.m_pX264Param->i_width = g_pstTouPcam->inWidth; /* 要编码的图像宽度. */
+    x264Encoder.m_pX264Param->i_height = g_pstTouPcam->inHeight; /* 要编码的图像高度 */
+
+    /* 4.设置编码复杂度 */
+    x264Encoder.m_pX264Param->i_level_idc = 30;
+
+    /* 5.图像质量控制 */
+    x264Encoder.m_pX264Param->rc.f_rf_constant = 25;
+    x264Encoder.m_pX264Param->rc.f_rf_constant_max = 45;
+
+    /* 码率控制 */
+    /*
+    * CQP 恒定质量
+    * CRF 恒定码率
+    * ABR 平均码率
+    */
+    x264Encoder.m_pX264Param->rc.i_rc_method = X264_RC_ABR;
+    x264Encoder.m_pX264Param->rc.i_vbv_max_bitrate = (int)((M_BITRATE*1.2)/1000); /* 平均码率模式，最大瞬时码率，默认0(与-B设置相同) */
+    x264Encoder.m_pX264Param->rc.i_bitrate = (int)M_BITRATE/1000;
+
+    /* 6.rtp时,使用i帧添加sps,pps */
+    x264Encoder.m_pX264Param->b_repeat_headers = 1; /* 重复SPS/PPS放到关键帧前面 */
+
+    /* 7.i帧间隔 */
+    x264Encoder.m_pX264Param->b_vfr_input = 0; /* 0时只使用fps控制帧率 */
+    int m_frameRate = VENC_FPS;
+    x264Encoder.m_pX264Param->i_fps_num = m_frameRate; /* 帧率分子 */
+    x264Encoder.m_pX264Param->i_fps_den = 1; /* 帧率分母 */
+	x264Encoder.m_pX264Param->i_timebase_den = x264Encoder.m_pX264Param->i_fps_num;
+	x264Encoder.m_pX264Param->i_timebase_num = x264Encoder.m_pX264Param->i_fps_den;    
+    x264Encoder.m_pX264Param->i_keyint_max = m_frameRate/2; /* 1秒刷新一个i帧 */
+
+    x264Encoder.m_pX264Param->b_intra_refresh = 0; /* i->p */
+    x264Encoder.m_pX264Param->b_annexb = 1;
+    x264Encoder.m_pX264Param->b_cabac = 1;
+
+    /* 9.设置编码格式 */
+    x264Encoder.m_pX264Param->i_csp = X264_CSP_I420; /* X264_CSP_I420 */
+    x264Encoder.m_pX264Param->i_log_level = X264_LOG_INFO; /* X264_LOG_DEBUG */
+
+#if 0
 	x264Encoder.m_x264Fp = fopen(filePath, "wb");
 	x264Encoder.m_pX264Param = (x264_param_t *)malloc(sizeof(x264_param_t));
 	//assert(x264Encoder.m_pX264Param);
@@ -56,26 +118,41 @@ void initX264Encoder(X264Encoder &px264Encoder, const char *filePath)
 
 	x264Encoder.m_pX264Param->i_csp = X264_CSP_I420;//X264_CSP_I420;// 
 	x264Encoder.m_pX264Param->i_log_level = X264_LOG_INFO;//X264_LOG_DEBUG;
+#endif
 
-	x264Encoder.m_x264iNal = 0;
-	x264Encoder.m_pX264Nals = NULL;
-	x264Encoder.m_pX264Pic_in = (x264_picture_t *)malloc(sizeof(x264_picture_t));
-	if (x264Encoder.m_pX264Pic_in == NULL)
-		exit(1);
-	else
-		memset(x264Encoder.m_pX264Pic_in, 0, sizeof(x264_picture_t));
-	//x264_picture_alloc(m_pX264Pic_in, X264_CSP_I420, m_pX264Param->i_width, m_pX264Param->i_height);
-	x264_picture_alloc(x264Encoder.m_pX264Pic_in, X264_CSP_I420, x264Encoder.m_pX264Param->i_width, x264Encoder.m_pX264Param->i_height);
-	x264Encoder.m_pX264Pic_in->i_type = X264_TYPE_AUTO;
+    x264Encoder.m_x264iNal = 0;
+    x264Encoder.m_pX264Nals = NULL;
+    x264Encoder.m_pX264Pic_in = (x264_picture_t *)malloc(sizeof(x264_picture_t));
+    if (x264Encoder.m_pX264Pic_in == NULL)
+    {
+        toupcam_log_f(LOG_ERROR, "%s", strerror(errno));
+        exit(1);
+    }
+    else
+    {
+        memset(x264Encoder.m_pX264Pic_in, 0, sizeof(x264_picture_t));
+    }
+    x264_picture_alloc(x264Encoder.m_pX264Pic_in, X264_CSP_I420, x264Encoder.m_pX264Param->i_width, x264Encoder.m_pX264Param->i_height);
+    x264Encoder.m_pX264Pic_in->i_type = X264_TYPE_AUTO;
 
-	x264Encoder.m_pX264Pic_out = (x264_picture_t *)malloc(sizeof(x264_picture_t));
-	if (x264Encoder.m_pX264Pic_out == NULL)
-		exit(1);
-	else
-		memset(x264Encoder.m_pX264Pic_out, 0, sizeof(x264_picture_t));
-	x264_picture_init(x264Encoder.m_pX264Pic_out);
-	x264Encoder.m_pX264Handle = x264_encoder_open(x264Encoder.m_pX264Param);
-	//assert(x264Encoder.m_pX264Handle);
+    x264Encoder.m_pX264Pic_out = (x264_picture_t *)malloc(sizeof(x264_picture_t));
+    if (x264Encoder.m_pX264Pic_out == NULL)
+    {
+        toupcam_log_f(LOG_ERROR, "%s", strerror(errno));
+        exit(1);
+    }
+    else
+    {
+        memset(x264Encoder.m_pX264Pic_out, 0, sizeof(x264_picture_t));
+    }
+    x264_picture_init(x264Encoder.m_pX264Pic_out);
+
+    x264Encoder.m_pX264Handle = x264_encoder_open(x264Encoder.m_pX264Param);
+    if(NULL == x264Encoder.m_pX264Handle)
+    {
+        toupcam_log_f(LOG_ERROR, "x264encoder_open Error.");
+        exit(1);
+    }
 }
 
 MPP_RET mpp_ctx_init(MPP_ENC_DATA_S **data)
