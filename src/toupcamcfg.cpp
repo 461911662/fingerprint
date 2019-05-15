@@ -137,7 +137,6 @@ static int snapshot(int fd, void *pdata)
     else
     {
         while(!g_pStaticImageDataFlag);
-        printf("picture arrived!\n");
         pthread_mutex_lock(&g_PthreadMutexJpgDest);
         if(g_pstTouPcam->inMaxWidth > 0 && g_pstTouPcam->inMaxHeight > 0)
         {
@@ -147,6 +146,7 @@ static int snapshot(int fd, void *pdata)
             if(NULL == pBuffer)
             {
                 perror("stToupcamRespon.pdata");
+                pthread_mutex_lock(&g_PthreadMutexJpgDest);
                 goto _exit0;
             }
 
@@ -180,7 +180,7 @@ static int snapshot(int fd, void *pdata)
                 {
                     while(1)
                     {
-                        usleep(1000);
+                        /* usleep(1000); */
                         iRet = send(fd, pBuffer, isize, 0);
                         if(iRet > 0)
                         {
@@ -254,21 +254,20 @@ static int setbrightnesstype(int fd, void *pdata)
         {
             g_pstTouPcam->stTexpo.bAutoAGain = pstToupcamReq->data.brightnesstype;
             /* Toupcam_put_Brightness(g_pstTouPcam->m_hcam, g_pstTouPcam->stTexpo.bAutoExposure); */
-            Toupcam_put_AutoExpoEnable(g_pstTouPcam->m_hcam, g_pstTouPcam->stTexpo.bAutoAGain);
-            Toupcam_get_AutoExpoEnable(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.bAutoAGain);
-            printf("cur brightness mode:%s\n", g_pstTouPcam->stTexpo.bAutoAGain?"manu":"auto");
+            /* Toupcam_put_AutoExpoEnable(g_pstTouPcam->m_hcam, g_pstTouPcam->stTexpo.bAutoAGain); */
+            /* Toupcam_get_AutoExpoEnable(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.bAutoAGain); */
+            printf("cur brightness mode:%s\n", g_pstTouPcam->stTexpo.bAutoAGain?"auto":"manu");
             if(g_pstTouPcam->stTexpo.bAutoAGain != pstToupcamReq->data.brightnesstype)
             {
-                pthread_mutex_unlock(&g_pstTouPcam->stTexpo.mutex);
                 goto _exit0;
             }
         }
     }
     else
     {
-        printf("cur brightness mode:%s\n", g_pstTouPcam->stTexpo.bAutoAGain?"manu":"auto");
+        printf("cur brightness mode:%s\n", g_pstTouPcam->stTexpo.bAutoAGain?"auto":"manu");
     }
-    stToupcamRespon.data.brightness = g_pstTouPcam->stTexpo.bAutoAGain;
+    stToupcamRespon.data.brightnesstype = g_pstTouPcam->stTexpo.bAutoAGain;
 
     pthread_mutex_unlock(&g_pstTouPcam->stTexpo.mutex);
 
@@ -278,6 +277,7 @@ static int setbrightnesstype(int fd, void *pdata)
     return ERROR_SUCCESS;
 
 _exit0:
+    pthread_mutex_unlock(&g_pstTouPcam->stTexpo.mutex);
     stToupcamRespon.cc = ERROR_FAILED;
     send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE+1, 0);
 
@@ -329,21 +329,19 @@ static int setbrightness(int fd, void *pdata)
     }
 
     pthread_mutex_lock(&g_pstTouPcam->stTexpo.mutex);
-    if(0x01 != g_pstTouPcam->stTexpo.bAutoExposure) /* 与曝光逻辑相反 */
+    if(g_pstTouPcam->stTexpo.bAutoExposure) /* 与曝光逻辑相反 */
     {
         g_pstTouPcam->stTexpo.AGain = usBrightness;
         hr = Toupcam_put_ExpoAGain(g_pstTouPcam->m_hcam, g_pstTouPcam->stTexpo.AGain);
         if (FAILED(hr))
         {
             printf("set brightness failly(%lld)!\n", hr);
-            pthread_mutex_unlock(&g_pstTouPcam->stTexpo.mutex);
             goto _exit0;
         }
         hr = Toupcam_get_ExpoAGain(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.AGain);
         if (FAILED(hr))
         {
             printf("set brightness failly(%lld)!\n", hr);
-            pthread_mutex_unlock(&g_pstTouPcam->stTexpo.mutex);
             goto _exit0;
         }
 
@@ -353,7 +351,6 @@ static int setbrightness(int fd, void *pdata)
     else
     {
         printf("not set brightness,because of this is auto mode!!!\n");
-        pthread_mutex_unlock(&g_pstTouPcam->stTexpo.mutex);
         goto _exit0;
     }
     pthread_mutex_unlock(&g_pstTouPcam->stTexpo.mutex);
@@ -364,6 +361,7 @@ static int setbrightness(int fd, void *pdata)
     return ERROR_SUCCESS;    
 
 _exit0:
+    pthread_mutex_unlock(&g_pstTouPcam->stTexpo.mutex);
     stToupcamRespon.cc = ERROR_FAILED;
     send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE+2, 0);
 
@@ -400,7 +398,8 @@ static int setexpotype(int fd, void *pdata)
     pthread_mutex_lock(&g_pstTouPcam->stTexpo.mutex);
     if(g_pstTouPcam->stTexpo.bAutoExposure != pstToupcamReq->data.expotype)
     {
-        if(1 != pstToupcamReq->data.expotype && g_pstTouPcam->stTexpo.bAutoAGain)
+#if 0
+        if(TRUE != pstToupcamReq->data.expotype && g_pstTouPcam->stTexpo.bAutoAGain)
         {
             if(!g_pstTouPcam->stTexpo.bAutoAGain)
             {
@@ -409,6 +408,7 @@ static int setexpotype(int fd, void *pdata)
             }
             g_pstTouPcam->stTexpo.AGain = 100;          /* default 100 Again */
         }
+#endif
 
         g_pstTouPcam->stTexpo.bAutoExposure = pstToupcamReq->data.brightnesstype;
         Toupcam_put_AutoExpoEnable(g_pstTouPcam->m_hcam, g_pstTouPcam->stTexpo.bAutoExposure);
@@ -416,7 +416,6 @@ static int setexpotype(int fd, void *pdata)
         printf("cur expo mode:%s\n", g_pstTouPcam->stTexpo.bAutoExposure?"auto":"manu");
         if(g_pstTouPcam->stTexpo.bAutoExposure != pstToupcamReq->data.brightnesstype)
         {
-            pthread_mutex_unlock(&g_pstTouPcam->stTexpo.mutex);
             goto _exit0;
         }
     }
@@ -432,6 +431,7 @@ static int setexpotype(int fd, void *pdata)
     return ERROR_SUCCESS;   
 
 _exit0:
+    pthread_mutex_unlock(&g_pstTouPcam->stTexpo.mutex);
     stToupcamRespon.cc = ERROR_FAILED;
     send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE+1, 0);
 
@@ -482,14 +482,13 @@ static int setexpo(int fd, void *pdata)
         if (FAILED(hr))
         {
             printf("set brightness failly(%lld)!\n", hr);
-            pthread_mutex_unlock(&g_pstTouPcam->stTexpo.mutex);
             goto _exit0;
         }
         hr = Toupcam_get_AutoExpoTarget(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.AutoTarget);
         if (FAILED(hr))
         {
             printf("get brightness failly(%lld)!\n", hr);
-            pthread_mutex_unlock(&g_pstTouPcam->stTexpo.mutex);
+            g_pstTouPcam->stTexpo.AutoTarget = usExpo;
             goto _exit0;
         }
         
@@ -498,8 +497,7 @@ static int setexpo(int fd, void *pdata)
     }
     else
     {
-        printf("not set expo,because of this is auto mode!!!\n");
-        pthread_mutex_unlock(&g_pstTouPcam->stTexpo.mutex);
+        printf("not set expo,because of this is manu mode!!!\n");
         goto _exit0;
     }
 
@@ -511,6 +509,7 @@ static int setexpo(int fd, void *pdata)
 
 
 _exit0:
+    pthread_mutex_unlock(&g_pstTouPcam->stTexpo.mutex);
     stToupcamRespon.cc = ERROR_FAILED;
     send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE+2, 0);
 
@@ -617,6 +616,7 @@ static int setcontrast(int fd, void *pdata)
         if (FAILED(hr))
         {
             printf("get contrast failly(%lld)!\n", hr);
+            g_pstTouPcam->stTcolor.Contrast = iContrast;
             pthread_mutex_unlock(&g_pstTouPcam->stTcolor.mutex);
             goto _exit0;
         }
@@ -750,15 +750,38 @@ static int sethistogramtype(int fd, void *pdata)
     }
 
     pthread_mutex_lock(&g_pstTouPcam->stHistoram.mutex);
-    if(g_pstTouPcam->stHistoram.bAutoHis != pstToupcamReq->data.historamtype)
+    if(1 != g_pstTouPcam->stHistoram.bAutoHis
+       && 1 ==  pstToupcamReq->data.historamtype)
     {
         hr = Toupcam_LevelRangeAuto(g_pstTouPcam->m_hcam);
         if(FAILED(hr))
         {
             goto _exit0;
         }
+        hr = Toupcam_get_LevelRange(g_pstTouPcam->m_hcam, g_pstTouPcam->stHistoram.aLow, g_pstTouPcam->stHistoram.aHigh);
+        if(FAILED(hr))
+        {
+            goto _exit0;
+        }
         g_pstTouPcam->stHistoram.bAutoHis = pstToupcamReq->data.historamtype;
         printf("cur contrast mode:%s\n", g_pstTouPcam->stHistoram.bAutoHis?"auto":"manu");
+    }
+    else if(1 == g_pstTouPcam->stHistoram.bAutoHis && 
+        g_pstTouPcam->stHistoram.bAutoHis !=  pstToupcamReq->data.historamtype)
+    {
+        hr = Toupcam_get_LevelRange(g_pstTouPcam->m_hcam, g_pstTouPcam->stHistoram.aLow, g_pstTouPcam->stHistoram.aHigh);
+        if(FAILED(hr))
+        {
+            goto _exit0;
+        }
+        g_pstTouPcam->stHistoram.aLow[3] = 0;
+        g_pstTouPcam->stHistoram.aHigh[3] = 255;
+        hr = Toupcam_put_LevelRange(g_pstTouPcam->m_hcam, g_pstTouPcam->stHistoram.aLow, g_pstTouPcam->stHistoram.aHigh);
+        if(FAILED(hr))
+        {
+            goto _exit0;
+        }
+        g_pstTouPcam->stHistoram.bAutoHis = pstToupcamReq->data.historamtype;
     }
     else
     {
@@ -773,6 +796,7 @@ static int sethistogramtype(int fd, void *pdata)
     return ERROR_SUCCESS;    
 
 _exit0:
+    pthread_mutex_unlock(&g_pstTouPcam->stHistoram.mutex);
     stToupcamRespon.cc = ERROR_FAILED;
     send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE+sizeof(EXPO_RECT_S), 0);
 
@@ -831,11 +855,13 @@ static int sethistogram(int fd, void *pdata)
                 hr = Toupcam_put_LevelRange(g_pstTouPcam->m_hcam, stHistoram.aLow, stHistoram.aHigh);
                 if(FAILED(hr))
                 {
+                    pthread_mutex_unlock(&g_pstTouPcam->stHistoram.mutex);
                     goto _exit0;
                 }
                 hr = Toupcam_get_LevelRange(g_pstTouPcam->m_hcam, g_pstTouPcam->stHistoram.aLow, g_pstTouPcam->stHistoram.aHigh);
                 if(FAILED(hr))
                 {
+                    pthread_mutex_unlock(&g_pstTouPcam->stHistoram.mutex);
                     goto _exit0;
                 }
                 memcpy(stToupcamRespon.data.historam.aLow, g_pstTouPcam->stHistoram.aLow, 8);
@@ -847,11 +873,13 @@ static int sethistogram(int fd, void *pdata)
         if(4 == i)
         {
             printf("no need to set it.\n");
+            pthread_mutex_unlock(&g_pstTouPcam->stHistoram.mutex);
             goto _exit0;
         }
     }
     else
     {
+        pthread_mutex_unlock(&g_pstTouPcam->stHistoram.mutex);
         printf("not set histogram,because of this is manu mode!!!\n");
         goto _exit0;
     }

@@ -51,6 +51,7 @@ static unsigned int SetAutoExpo_Toupcam();
 static unsigned int Set_WhiteBalanceToupcam();
 static unsigned int Set_ColorToupcam();
 static unsigned int Set_ToupcamOrientation();
+static unsigned int Set_HistogramToupcam();
 static int init_Toupcam_button();
 
 
@@ -294,13 +295,19 @@ unsigned int ConfigDevice(void *pvoid)
     /* 白平衡设置 */
 /*
 * 白平衡只能在相机启动后push/pull使用
-*
+*/
     iRet = Set_WhiteBalanceToupcam();
     if(ERROR_FAILED == iRet)
     {
         return ERROR_FAILED;
     }
-*/
+
+    /*  初始化直方图 */
+    /* iRet = Set_HistogramToupcam(); 同上 */
+    if(ERROR_FAILED == iRet)
+    {
+        return ERROR_FAILED;
+    }
 
     /* 颜色设置 */
     iRet = Set_ColorToupcam();
@@ -505,21 +512,22 @@ static unsigned int SetAutoExpo_Toupcam()
     
     pthread_mutex_lock(&g_pstTouPcam->stTexpo.mutex);
     Toupcam_get_AutoExpoEnable(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.bAutoExposure);
-    if(!g_pstTouPcam->stTexpo.bAutoExposure)
+    if(g_pstTouPcam->stTexpo.bAutoExposure)
     {
-        g_pstTouPcam->stTexpo.bAutoExposure = 1;
+        g_pstTouPcam->stTexpo.bAutoExposure = 0;
         Toupcam_put_AutoExpoEnable(g_pstTouPcam->m_hcam, g_pstTouPcam->stTexpo.bAutoExposure);
     }
     toupcam_dbg_f(LOG_DEBUG, "auto expo is %s.\n", g_pstTouPcam->stTexpo.bAutoExposure?"enable":"disable");
 
     Toupcam_get_AutoExpoTarget(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.AutoTarget);
 
+#if 0
     if(120 != g_pstTouPcam->stTexpo.AutoTarget) /* default expo 120 */
     {
         g_pstTouPcam->stTexpo.AutoTarget = 120;
         Toupcam_put_AutoExpoTarget(g_pstTouPcam->m_hcam, g_pstTouPcam->stTexpo.AutoTarget);
     }
-
+#endif
     toupcam_dbg_f(LOG_DEBUG, "auto expo target is %d.\n", g_pstTouPcam->stTexpo.AutoTarget);
 
     /*Toupcam_put_MaxAutoExpoTimeAGain();*/
@@ -556,6 +564,9 @@ static unsigned int Set_WhiteBalanceToupcam()
     int iTTCtx = 0;
     PITOUPCAM_TEMPTINT_CALLBACK fnTTProc = NULL;
 
+    /* 初始化锁 */
+    pthread_mutex_init(&g_pstTouPcam->stWhiteBlc.mutex, NULL);
+#if 0
     /* set auto white balance mode as Temp/Tint */
     /* auto white balance "one push". This function must be called AFTER Toupcam_StartXXXX */
     hr = Toupcam_AwbOnePush(g_pstTouPcam->m_hcam, fnTTProc, (void *)&iTTCtx);
@@ -564,9 +575,6 @@ static unsigned int Set_WhiteBalanceToupcam()
         toupcam_log_f(LOG_ERROR, "set white balance fnTTProc failed!\n");
         //return ERROR_FAILED;
     }
-
-    /* 初始化锁 */
-    pthread_mutex_init(&g_pstTouPcam->stWhiteBlc.mutex, NULL);
     
     pthread_mutex_lock(&g_pstTouPcam->stWhiteBlc.mutex);
     g_pstTouPcam->stWhiteBlc.iauto = 1;
@@ -580,7 +588,7 @@ static unsigned int Set_WhiteBalanceToupcam()
     }
     toupcam_dbg_f(LOG_DEBUG, "White balance Temp:%d, Tint:%d\n", g_pstTouPcam->stWhiteBlc.Temp, g_pstTouPcam->stWhiteBlc.Tint);
     pthread_mutex_unlock(&g_pstTouPcam->stWhiteBlc.mutex);
-
+#endif
     return ERROR_SUCCESS;
 }
 
@@ -645,6 +653,48 @@ static unsigned int Set_ColorToupcam()
 }
 
 /*
+* 初始化直方图数据
+*/
+static unsigned int Set_HistogramToupcam()
+{
+    HRESULT hr;
+    /* 初始化直方图数据锁 */
+    pthread_mutex_init(&g_pstTouPcam->stHistoram.mutex, NULL);
+
+    pthread_mutex_lock(&g_pstTouPcam->stHistoram.mutex);    
+    /* 设置直方图为自动         */
+    g_pstTouPcam->stHistoram.bAutoHis = TRUE;
+    hr = Toupcam_LevelRangeAuto(g_pstTouPcam->m_hcam);
+    if(FAILED(hr))
+    {
+        toupcam_log_f(LOG_ERROR, "set auto histogram failed.\n");
+        return ERROR_FAILED;
+    }
+    
+    /* 更新直方图范围 */
+    hr = Toupcam_put_LevelRange(g_pstTouPcam->m_hcam, g_pstTouPcam->stHistoram.aLow, g_pstTouPcam->stHistoram.aHigh);
+    if(FAILED(hr))
+    {
+        toupcam_log_f(LOG_ERROR, "updated histogram data failed.\n");
+        pthread_mutex_unlock(&g_pstTouPcam->stHistoram.mutex);
+        return ERROR_FAILED;
+    }
+    toupcam_log_f(LOG_DEBUG, "cur auto Histogram data:LR:[%d] LG:[%d] LB:[%d] LY:[%d]\n", 
+                                g_pstTouPcam->stHistoram.aLow[0],
+                                g_pstTouPcam->stHistoram.aLow[1],
+                                g_pstTouPcam->stHistoram.aLow[2],
+                                g_pstTouPcam->stHistoram.aLow[3]);
+    toupcam_log_f(LOG_DEBUG, "cur auto Histogram data:HR:[%d] HG:[%d] HB:[%d] HY:[%d]\n", 
+                                g_pstTouPcam->stHistoram.aHigh[0],
+                                g_pstTouPcam->stHistoram.aHigh[1],
+                                g_pstTouPcam->stHistoram.aHigh[2],
+                                g_pstTouPcam->stHistoram.aHigh[3]);    
+    pthread_mutex_unlock(&g_pstTouPcam->stHistoram.mutex);
+
+    return ERROR_SUCCESS;    
+}
+
+/*
 * 设置Toupcam图像方向
 */
 static unsigned int Set_ToupcamOrientation()
@@ -695,12 +745,14 @@ static unsigned int Set_ToupcamOrientation()
         return ERROR_FAILED;
     }
 
+#ifdef ROI_IMAGE
     nWidth = 640, nHeight = 480;
     //WIDTH = nWidth, HEIGHT = nHeight;
     g_pstTouPcam->inHeight = g_pstTouPcam->inMaxHeight = 480;
     g_pstTouPcam->inWidth = g_pstTouPcam->inMaxWidth = 640;
     Toupcam_put_Roi(g_hcam, 200, 200, 640, 480);
-    
+#endif
+
     return ERROR_SUCCESS;
 }
 

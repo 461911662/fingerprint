@@ -9,6 +9,7 @@
 #define ARRAY_SIZE(a) sizeof(a)/sizeof(a[0])
 
 #define SOFT_ENCODE_H264
+#define ROI_IMAGE
 
 #define END_BUFF_SIZE         (0)
 #define INVAILD_BUFF_SIZE     (1)
