@@ -20,6 +20,7 @@ typedef struct __X264_ENCODER__
 	FILE *m_x264Fp;
 }X264Encoder;
 #define RGB24_DEPTH  (3)
+#define INITX264ENCODER_DEFVAL
 
 extern X264Encoder x264Encoder;
 extern int nWidth, nHeight;

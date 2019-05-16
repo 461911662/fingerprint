@@ -31,6 +31,7 @@ static void convertFrameToX264Img(x264_image_t *x264InImg,AVFrame *pFrameYUV);
 
 void initX264Encoder(X264Encoder &px264Encoder, const char *filePath)
 {
+#ifndef INITX264ENCODER_DEFVAL
     x264Encoder.m_x264Fp = fopen(filePath, "wb");
 
     x264Encoder.m_pX264Param = (x264_param_t *)malloc(sizeof(x264_param_t));
@@ -42,7 +43,7 @@ void initX264Encoder(X264Encoder &px264Encoder, const char *filePath)
 	x264_param_default(x264Encoder.m_pX264Param);
 
     /* 0.编码延时 */
-    x264_param_default_preset(x264Encoder.m_pX264Param, "ultrafast" , "zerolatency" );
+    x264_param_default_preset(x264Encoder.m_pX264Param, "veryfast" , "zerolatency" );
 
     /* 1.初始化profile */
     x264_param_apply_profile(x264Encoder.m_pX264Param, "baseline");
@@ -90,8 +91,7 @@ void initX264Encoder(X264Encoder &px264Encoder, const char *filePath)
     /* 9.设置编码格式 */
     x264Encoder.m_pX264Param->i_csp = X264_CSP_I420; /* X264_CSP_I420 */
     x264Encoder.m_pX264Param->i_log_level = X264_LOG_INFO; /* X264_LOG_DEBUG */
-
-#if 0
+#else
 	x264Encoder.m_x264Fp = fopen(filePath, "wb");
 	x264Encoder.m_pX264Param = (x264_param_t *)malloc(sizeof(x264_param_t));
 	//assert(x264Encoder.m_pX264Param);
@@ -208,8 +208,8 @@ MPP_RET mpp_setup(MPP_ENC_DATA_S *p)
     rc_cfg = &p->rc_cfg;
 
     /* setup default parameter */
-    p->fps = 30;
-    p->gop = 60;
+    p->fps = 10;
+    p->gop = 5;
     p->bps = p->width * p->height / 8 * p->fps;
 
     prep_cfg->change        = MPP_ENC_PREP_CFG_CHANGE_INPUT |
@@ -300,7 +300,7 @@ MPP_RET mpp_setup(MPP_ENC_DATA_S *p)
              * 40 / 41 / 42         - 1080p@30fps / 1080p@30fps / 1080p@60fps
              * 50 / 51 / 52         - 4K@30fps
              */
-            codec_cfg->h264.level    = 40;
+            codec_cfg->h264.level    = 30;
             codec_cfg->h264.entropy_coding_mode  = 1;
             codec_cfg->h264.cabac_init_idc  = 0;
             codec_cfg->h264.transform8x8_mode = 1;
@@ -582,26 +582,32 @@ static void repeatencode2h264(char *ptr, void *rsppsp, size_t *len, size_t len0)
         {
             pctr2 = pctr;
             x264Encoder.m_x264iNal++;
+            toupcam_dbg_f(LOG_DEBUG, "x264iNal:%d", x264Encoder.m_x264iNal);
+            x264Nal = (x264_nal_t *)realloc(x264Nal, sizeof(x264_nal_t)*x264Encoder.m_x264iNal);
+            px264Nal = x264Nal;
+            px264Nal += x264Encoder.m_x264iNal - 1;
+            px264Nal->i_type = *(pctr+4) & 0x1f;
+            px264Nal->i_payload = ilen;
+            px264Nal->p_payload = (uint8_t*)pctr;
+
+#if 0
             px264Nal = (x264_nal_t *)malloc(sizeof(x264_nal_t));
             px264Nal->i_type = *(pctr+4) & 0x1f;
             px264Nal->i_payload = ilen;
             px264Nal->p_payload = (uint8_t*)pctr;
+#endif
         }
         pctr++;
     }
 
-    x264Encoder.m_pX264Nals = px264Nal;
+    x264Encoder.m_pX264Nals = x264Nal;
 
-    /* 添加h264头 */
-    if(NULL == rsppsp)
-    {
-        return;
-    }
     uint8_t *p_payload = NULL;
 
     for (int i = 0; i < x264Encoder.m_x264iNal; ++i)
     {
-        if(0x05 == x264Encoder.m_pX264Nals[i].i_type) /* I帧 */
+        /* if(0x05 == x264Encoder.m_pX264Nals[i].i_type) */ 
+        if(x264Encoder.m_pX264Nals[i].i_type) /* I帧 添加h264头 */
         {
             p_payload = (uint8_t *)malloc(len0+x264Encoder.m_pX264Nals[i].i_payload);
             memcpy(p_payload, rsppsp, len0);
@@ -609,6 +615,25 @@ static void repeatencode2h264(char *ptr, void *rsppsp, size_t *len, size_t len0)
             x264Encoder.m_pX264Nals[i].p_payload = p_payload;
             *len += len0;
             px264Nal->i_payload += len0;
+        }
+
+        if(0x05 == x264Encoder.m_pX264Nals[i].i_type)
+        {
+            toupcam_dbg_f(LOG_DEBUG, "I payload:%d\n", px264Nal->i_payload);            
+        }
+        /*
+        else if(0x05 == x264Encoder.m_pX264Nals[i].i_type)
+        {
+            toupcam_log_f(LOG_ERROR, "P payload:%d\n", px264Nal->i_payload);
+        }
+        else if(0x05 == x264Encoder.m_pX264Nals[i].i_type)
+        {
+            toupcam_log_f(LOG_ERROR, "B payload:%d\n", px264Nal->i_payload);
+        }
+        */
+        else
+        {
+            toupcam_dbg_f(LOG_DEBUG, "other payload:%d\n", px264Nal->i_payload);
         }
     }
 
@@ -639,23 +664,47 @@ static unsigned int rtp_transmit(void *ptr, void *rsppsp, size_t len, size_t len
         memcpy(rtpdata, x264Encoder.m_pX264Nals[i].p_payload, pdata->datalen);
         pdata->buff=rtpdata;
     	pdata->bufrelen=0;
-		//printf("buff len : %d\r\n", pdata->datalen);
+		/* printf("buff len : %d\r\n", pdata->datalen); */
 
 		/* 数据封包 */
     	while((rtp=rtp_pack(pdata,&head))!=NULL)
     	{
         	/* 数据发送 */
         	rtp_send(rtp,sock);
-        	free(rtp);
-        	rtp=NULL;
+            if(rtp)
+            {
+        	    free(rtp);
+                rtp=NULL;
+            }
         	/* 序列号增加 */
         	head.sernum++;
         	/* usleep(500); */
 			/* printf("Send Num : %d\r\n", sendnum++); */
     	}
-		free(pdata);
-		pdata=NULL;
+        
+        if(pdata->buff)
+        {
+            free(pdata->buff);
+            pdata->buff = NULL;
+        }
+        if(pdata)
+        {
+		    free(pdata);
+            pdata = NULL;
+        }
+        if(x264Encoder.m_pX264Nals[i].p_payload)
+        {
+            free(x264Encoder.m_pX264Nals[i].p_payload);
+            x264Encoder.m_pX264Nals[i].p_payload = NULL;
+        }
 	}
+
+    if(x264Encoder.m_pX264Nals)
+    {
+        free(x264Encoder.m_pX264Nals);
+        x264Encoder.m_pX264Nals = NULL;
+    }
+
     /* 时间戳增加 */
     head.timtamp+=800;
     /* usleep(1*1000*1000); */
@@ -822,7 +871,6 @@ MPP_RET mpp_encode(MPP_ENC_DATA_S *p, unsigned char *yuv, unsigned long len)
 
     static int flag = 0;
     static size_t len0 = 0;
-    //static char ch264spspps[45] = {0};
     static char *pch264spspps = NULL;
 
     mpi = p->mpi;
@@ -902,7 +950,7 @@ MPP_RET mpp_encode(MPP_ENC_DATA_S *p, unsigned char *yuv, unsigned long len)
         void *ptr   = mpp_packet_get_pos(packet);
         size_t len  = mpp_packet_get_length(packet);
 
-        if(0 == p->frame_count%60)
+        if(0 == p->frame_count%10)
         {
             //fwrite(pch264spspps, 1, 45, p->fp_output);
             rtp_transmit(ptr, pch264spspps, len, len0);

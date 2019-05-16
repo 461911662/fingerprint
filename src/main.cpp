@@ -206,6 +206,11 @@ void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx)
 #ifdef SOFT_ENCODE_H264 
                 encode_yuv((unsigned char *)g_pImageData);
 #else
+                if(g_pstmpp_enc_data && g_pstmpp_enc_data->frame_count >= MPP_FRAME_MAXNUM)
+                {
+                    mpp_ctx_deinit(&g_pstmpp_enc_data);
+                    init_mpp();
+                }
                 encode2hardware((unsigned char *)g_pImageData);
 #endif
                 frame_num++;
@@ -351,10 +356,9 @@ void *pthread_link_task1(void *argv)
         hr = Toupcam_GetHistogram(g_pstTouPcam->m_hcam, pHistramCallback, (void*)&pHistoramCtx);
         if(FAILED(hr))
         {
-            toupcam_log_f(LOG_INFO, "get Historam data failed(%lld)\n", hr);
+            toupcam_dbg_f(LOG_DEBUG, "get Historam data failed(%lld)\n", hr);
             continue;
         }
-        
 
         stToupcamRespon.com.size[0] = ARRAY_SIZE(g_pstTouPcam->stHistoram.aHistY)*4;
         stToupcamRespon.cc = ERROR_SUCCESS;
@@ -531,7 +535,52 @@ void *pthread_server(void *pdata)
 }
 
 void *pthread_health_monitor(void *pdata)
-{   
+{
+    HRESULT hr;
+    while(1)
+    {
+        sleep(5*60);
+        pthread_mutex_trylock(&g_PthreadMutexMonitor);
+        /* 同步自动增益 */
+        g_pstTouPcam->stTexpo.bAutoAGain = g_pstTouPcam->stTexpo.bAutoAGain;
+
+        hr = Toupcam_get_ExpoAGain(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.AGain);
+        if (FAILED(hr))
+        {
+            toupcam_log_f(LOG_WARNNING, "get brightness failly(%lld)!\n", hr);
+        }
+
+        /* 同步曝光 */
+        hr = Toupcam_get_AutoExpoEnable(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.bAutoExposure);
+        if (FAILED(hr))
+        {
+            toupcam_log_f(LOG_WARNNING, "get auto expo failly(%lld)!\n", hr);
+        }
+        hr = Toupcam_get_AutoExpoTarget(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.AutoTarget);
+        if (FAILED(hr))
+        {
+            toupcam_log_f(LOG_WARNNING, "get brightness failly(%lld)!\n", hr);
+        }
+
+        /* 同步对比度 */
+        g_pstTouPcam->stTcolor.bAutoColor = g_pstTouPcam->stTcolor.bAutoColor;
+        hr = Toupcam_get_Contrast(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTcolor.Contrast);
+        if (FAILED(hr))
+        {
+            toupcam_log_f(LOG_WARNNING, "get contrast failly(%lld)!\n", hr);
+        }
+
+        /* 同步直方图 */
+        g_pstTouPcam->stHistoram.bAutoHis = g_pstTouPcam->stHistoram.bAutoHis;
+        hr = Toupcam_get_LevelRange(g_pstTouPcam->m_hcam, g_pstTouPcam->stHistoram.aLow, g_pstTouPcam->stHistoram.aHigh);
+        if(FAILED(hr))
+        {
+            toupcam_log_f(LOG_WARNNING, "get histogram failly(%lld)!\n", hr);
+        } 
+
+        pthread_mutex_unlock(&g_PthreadMutexMonitor);
+    }
+
 	return NULL;
 }
 

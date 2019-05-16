@@ -8,7 +8,8 @@
 #define REQUES_SIZE  (128)
 #define ARRAY_SIZE(a) sizeof(a)/sizeof(a[0])
 
-#define SOFT_ENCODE_H264
+#undef SOFT_ENCODE_H264
+#define MPP_FRAME_MAXNUM 2000
 #define ROI_IMAGE
 
 #define END_BUFF_SIZE         (0)
@@ -248,6 +249,7 @@ typedef struct Toupcam
     unsigned int (*ConfigDevice)(void *);
     unsigned int (*StartDevice)(void *);
     unsigned int (*CloseDevice)(void *);
+    unsigned int (*SufInitialDevice)(void*);
 
     /* event */
     void (*OnEventError)(void);
@@ -280,6 +282,7 @@ extern void* g_pImageData;
 extern void* g_pStaticImageData;
 extern int g_pStaticImageDataFlag;
 extern unsigned int iEndianness;
+extern pthread_mutex_t g_PthreadMutexMonitor;
 
 
 extern struct sockets *sock; /* udp potr:5004 */

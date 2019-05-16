@@ -28,6 +28,7 @@ void common_hander(int fd, void *pBuff, unsigned int uiSize)
     {
         if(pstToupcamReq->com.cmd == g_Comm_Entry[i].cmd_id)
         {
+            pthread_mutex_trylock(&g_PthreadMutexMonitor);
             iRet = g_Comm_Entry[i].handle(fd, pstToupcamReq, uiSize);
             printf("request(%d): cmd:%02x,subcmd:%04x,", fd, pstToupcamReq->com.cmd, pstToupcamReq->com.subcmd);
             for(j=0; j<uiSize-4; j++)
@@ -35,6 +36,7 @@ void common_hander(int fd, void *pBuff, unsigned int uiSize)
                 printf("%02x,", pstToupcamReq->data.reserve[j]);
             }
             printf("cc: %d\n", iRet);
+            pthread_mutex_unlock(&g_PthreadMutexMonitor);
        }
     }
     return;

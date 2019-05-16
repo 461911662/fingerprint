@@ -33,6 +33,8 @@ extern "C"
 };
 
 #define H264  /* 使用h264软件编码 */
+extern MPP_ENC_DATA_S *g_pstmpp_enc_data;
+extern MPP_RET mpp_ctx_deinit(MPP_ENC_DATA_S **data);
 
 #define CALLBAK_TOUPCAM_KIT 1
 //#define LOWRESOLUTION 1
@@ -129,6 +131,62 @@ unsigned int PreInitialDevice(void *pvoid)
     return ERROR_SUCCESS;
 }
 
+static void *pthread_running(void *_val)
+{
+    int iRet = ERROR_SUCCESS;
+    pthread_detach(pthread_self());
+    toupcam_log_f(LOG_INFO, "task thread is running");
+    sleep(5); /* 等待摄像机的启动 */
+
+    /* 设置Toupcam自动曝光 */
+    iRet = SetAutoExpo_Toupcam();
+    if(ERROR_FAILED == iRet)
+    {
+        toupcam_log_f(LOG_INFO, "set auto Expo failed");
+    }
+
+    /* 白平衡设置 */
+    /*
+    * 白平衡只能在相机启动后push/pull使用
+    */
+    iRet = Set_WhiteBalanceToupcam();
+    if(ERROR_FAILED == iRet)
+    {
+        toupcam_log_f(LOG_INFO, "set white balance failed");
+    }
+
+    /*  初始化直方图 */
+    iRet = Set_HistogramToupcam();/* 同上 */
+    if(ERROR_FAILED == iRet)
+    {
+        toupcam_log_f(LOG_INFO, "set histogram failed");
+    }    
+
+    pthread_exit(_val);
+    return NULL;
+}
+
+unsigned int SufInitialDevice(void *pvoid)
+{
+    if(NULL == pvoid)
+    {
+        toupcam_log_f(LOG_ERROR, "pvoid is null.\n");
+        return ERROR_FAILED;
+    }
+    TOUPCAM_S *pTmpToupcam = (TOUPCAM_S *)pvoid;
+    HRESULT hr;
+    void **retval;
+    pthread_t pdonce;
+    hr = pthread_create(&pdonce, NULL, pthread_running, *retval);
+    if(hr != 0)
+    {
+        toupcam_log_f(LOG_WARNNING, "%s", strerror(errno));
+        return ERROR_FAILED;
+    }
+    pthread_join(pdonce, retval);
+    toupcam_log_f(LOG_INFO, "task thread is exit");
+    return ERROR_SUCCESS;    
+}
 
 /*
 * 打开一个摄像头设备
@@ -198,12 +256,17 @@ unsigned int StartDevice(void *pvoid)
 
     initX264Encoder(x264Encoder,"myCamera.h264");
 #else
-    toupcam_log_f(LOG_ERROR, "not soft_encode_h264.\n");
+    toupcam_log_f(LOG_WARNNING, "not soft_encode_h264.\n");
+    if(g_pstmpp_enc_data && g_pstmpp_enc_data->frame_count >= MPP_FRAME_MAXNUM)
+    {
+        mpp_ctx_deinit(&g_pstmpp_enc_data);
+    }
     init_mpp();
 #endif
     toupcam_dbg_f(LOG_DEBUG, "pTmpToupcam->inWidth:%d, pTmpToupcam->inHeight:%d\n", g_pstTouPcam->inWidth, g_pstTouPcam->inHeight);
     toupcam_dbg_f(LOG_DEBUG, "pTmpToupcam->inMaxWidth:%d, pTmpToupcam->inMaxHeight:%d\n", g_pstTouPcam->inMaxWidth, g_pstTouPcam->inMaxHeight);
 
+    sleep(10);
     /* 开启拉模式视频 */
     iRet = Toupcam_StartPullModeWithCallback(pToupcam->m_hcam, EventCallback, &uiCallbackContext);
     if (FAILED(iRet))
@@ -217,6 +280,7 @@ unsigned int StartDevice(void *pvoid)
     }
     else
     {
+        SufInitialDevice(g_pstTouPcam);
         toupcam_log_f(LOG_WARNNING, "press any B/b to exit\n");
         while(1)
         {
@@ -282,30 +346,6 @@ unsigned int ConfigDevice(void *pvoid)
     if(FAILED(iRet))
     {
         toupcam_log_f(LOG_ERROR, "Toupcam failed.\n", __func__);
-        return ERROR_FAILED;
-    }
-
-    /* 设置Toupcam自动曝光 */
-    iRet = SetAutoExpo_Toupcam();
-    if(ERROR_FAILED == iRet)
-    {
-        return ERROR_FAILED;
-    }
-
-    /* 白平衡设置 */
-/*
-* 白平衡只能在相机启动后push/pull使用
-*/
-    iRet = Set_WhiteBalanceToupcam();
-    if(ERROR_FAILED == iRet)
-    {
-        return ERROR_FAILED;
-    }
-
-    /*  初始化直方图 */
-    /* iRet = Set_HistogramToupcam(); 同上 */
-    if(ERROR_FAILED == iRet)
-    {
         return ERROR_FAILED;
     }
 
@@ -481,6 +521,7 @@ static unsigned int _init(void)
     g_pstTouPcam->StartDevice = StartDevice;
     g_pstTouPcam->ConfigDevice = ConfigDevice;
     g_pstTouPcam->CloseDevice = CloseDevice;
+    g_pstTouPcam->SufInitialDevice = SufInitialDevice;
 
     g_pstTouPcam->OnEventImage = OnEventImage;
     g_pstTouPcam->OnEventExpo = OnEventExpo;
@@ -514,20 +555,20 @@ static unsigned int SetAutoExpo_Toupcam()
     Toupcam_get_AutoExpoEnable(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.bAutoExposure);
     if(g_pstTouPcam->stTexpo.bAutoExposure)
     {
-        g_pstTouPcam->stTexpo.bAutoExposure = 0;
+        g_pstTouPcam->stTexpo.bAutoExposure = 1;
         Toupcam_put_AutoExpoEnable(g_pstTouPcam->m_hcam, g_pstTouPcam->stTexpo.bAutoExposure);
     }
     toupcam_dbg_f(LOG_DEBUG, "auto expo is %s.\n", g_pstTouPcam->stTexpo.bAutoExposure?"enable":"disable");
 
     Toupcam_get_AutoExpoTarget(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.AutoTarget);
 
-#if 0
+
     if(120 != g_pstTouPcam->stTexpo.AutoTarget) /* default expo 120 */
     {
         g_pstTouPcam->stTexpo.AutoTarget = 120;
         Toupcam_put_AutoExpoTarget(g_pstTouPcam->m_hcam, g_pstTouPcam->stTexpo.AutoTarget);
     }
-#endif
+
     toupcam_dbg_f(LOG_DEBUG, "auto expo target is %d.\n", g_pstTouPcam->stTexpo.AutoTarget);
 
     /*Toupcam_put_MaxAutoExpoTimeAGain();*/
@@ -566,7 +607,7 @@ static unsigned int Set_WhiteBalanceToupcam()
 
     /* 初始化锁 */
     pthread_mutex_init(&g_pstTouPcam->stWhiteBlc.mutex, NULL);
-#if 0
+#if 1
     /* set auto white balance mode as Temp/Tint */
     /* auto white balance "one push". This function must be called AFTER Toupcam_StartXXXX */
     hr = Toupcam_AwbOnePush(g_pstTouPcam->m_hcam, fnTTProc, (void *)&iTTCtx);

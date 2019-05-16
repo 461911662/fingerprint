@@ -61,8 +61,6 @@ static int blackrorator(int fd, void *pdata)
         goto _exit0;
     }
 
-    /* lock */
-    pthread_mutex_lock(&g_PthreadMutexMonitor);
     pibNegative = &g_pstTouPcam->bNegative;
     hr = Toupcam_get_Negative(g_pstTouPcam->m_hcam, pibNegative);
     if (FAILED(hr))
@@ -77,8 +75,6 @@ static int blackrorator(int fd, void *pdata)
         goto _exit0;
     }
     *pibNegative = (*pibNegative)^1;
-    /* unlock */
-    pthread_mutex_unlock(&g_PthreadMutexMonitor);
 
     stToupcamRespon.com.size[0] = COMMON_BUFF_SIZE;
     iRet = send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE, 0);
@@ -180,7 +176,7 @@ static int snapshot(int fd, void *pdata)
                 {
                     while(1)
                     {
-                        /* usleep(1000); */
+                        usleep(1000);
                         iRet = send(fd, pBuffer, isize, 0);
                         if(iRet > 0)
                         {
@@ -209,7 +205,7 @@ static int snapshot(int fd, void *pdata)
         g_pStaticImageDataFlag = 0;        
         pthread_mutex_unlock(&g_PthreadMutexJpgDest);
     }
-
+    
     return ERROR_SUCCESS;
 
 _exit0:
@@ -248,7 +244,7 @@ static int setbrightnesstype(int fd, void *pdata)
     }
 
     pthread_mutex_lock(&g_pstTouPcam->stTexpo.mutex);
-    if(g_pstTouPcam->stTexpo.bAutoExposure)
+    if(!g_pstTouPcam->stTexpo.bAutoExposure)
     {
         if(pstToupcamReq->data.brightnesstype != g_pstTouPcam->stTexpo.bAutoAGain)
         {
@@ -268,6 +264,13 @@ static int setbrightnesstype(int fd, void *pdata)
         printf("cur brightness mode:%s\n", g_pstTouPcam->stTexpo.bAutoAGain?"auto":"manu");
     }
     stToupcamRespon.data.brightnesstype = g_pstTouPcam->stTexpo.bAutoAGain;
+
+    hr = Toupcam_get_ExpoAGain(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.AGain);
+    if (FAILED(hr))
+    {
+        printf("get brightness failly(%lld)!\n", hr);
+        goto _exit0;
+    }
 
     pthread_mutex_unlock(&g_pstTouPcam->stTexpo.mutex);
 
@@ -329,7 +332,7 @@ static int setbrightness(int fd, void *pdata)
     }
 
     pthread_mutex_lock(&g_pstTouPcam->stTexpo.mutex);
-    if(g_pstTouPcam->stTexpo.bAutoExposure) /* 与曝光逻辑相反 */
+    if(!g_pstTouPcam->stTexpo.bAutoExposure) /* 与曝光逻辑相反 */
     {
         g_pstTouPcam->stTexpo.AGain = usBrightness;
         hr = Toupcam_put_ExpoAGain(g_pstTouPcam->m_hcam, g_pstTouPcam->stTexpo.AGain);
@@ -341,7 +344,7 @@ static int setbrightness(int fd, void *pdata)
         hr = Toupcam_get_ExpoAGain(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.AGain);
         if (FAILED(hr))
         {
-            printf("set brightness failly(%lld)!\n", hr);
+            printf("get brightness failly(%lld)!\n", hr);
             goto _exit0;
         }
 
@@ -418,6 +421,14 @@ static int setexpotype(int fd, void *pdata)
         {
             goto _exit0;
         }
+
+        hr = Toupcam_get_AutoExpoTarget(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.AutoTarget);
+        if (FAILED(hr))
+        {
+            printf("get brightness failly(%lld)!\n", hr);;
+            goto _exit0;
+        }
+
     }
     else
     {
@@ -551,6 +562,15 @@ static int setcontrasttype(int fd, void *pdata)
     }
     printf("cur contrast mode:%s\n", g_pstTouPcam->stTcolor.bAutoColor?"auto":"manu");
     stToupcamRespon.data.contrasttype = g_pstTouPcam->stTcolor.bAutoColor;
+
+    hr = Toupcam_get_Contrast(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTcolor.Contrast);
+    if (FAILED(hr))
+    {
+        printf("get contrast failly(%lld)!\n", hr);
+        pthread_mutex_unlock(&g_pstTouPcam->stTcolor.mutex);
+        goto _exit0;
+    }
+
     pthread_mutex_unlock(&g_pstTouPcam->stTcolor.mutex);
 
     stToupcamRespon.com.size[0] = COMMON_BUFF_SIZE+1;
@@ -938,8 +958,8 @@ static int syncserverdata(int fd, void *pdata)
         stToupcamRespon.data.totaldata.historam.aHigh[i] = g_pstTouPcam->stHistoram.aHigh[i];
         stToupcamRespon.data.totaldata.historam.aLow[i] = g_pstTouPcam->stHistoram.aLow[i];
     }
-    stToupcamRespon.com.size[0] = TOUPCAM_COMMON_RESPON_HEADER_SIZE+sizeof(TOTAL_DATA_S);
-    
+
+    stToupcamRespon.com.size[0] = TOUPCAM_COMMON_RESPON_HEADER_SIZE+sizeof(TOTAL_DATA_S);    
     send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE+sizeof(TOTAL_DATA_S), 0);
     return ERROR_SUCCESS;
     
