@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
+#include <sched.h>
 #include <pthread.h>
 #include <unistd.h>
 #include <signal.h>
@@ -21,6 +23,8 @@
 #include "../include/toupcam_log.h"
 #include "../include/common_toupcam.h"
 #include "../include/mpp_encode_data.h"
+#include "../include/toupcam_data.h"
+#include "../include/toupcam_parse.h"
 
 //using namespace cv;
 using namespace std;
@@ -48,6 +52,7 @@ void* g_pImageData = NULL;
 void* g_pStaticImageData = NULL;
 MPP_ENC_DATA_S *g_pstmpp_enc_data = NULL;
 int g_pStaticImageDataFlag = 0; /* 检测静态图片是否捕获完成 */
+HashTable *g_pstToupcamHashTable = NULL;
 
 unsigned g_total = 0;
 
@@ -73,6 +78,9 @@ pthread_mutex_t g_PthreadMutexMonitor;
 pthread_mutex_t g_PthreadMutexUDP;
 sem_t g_SemaphoreHistoram;
 
+unsigned int *g_puiProcess_task = NULL;
+unsigned int g_uiProcess_num = 0;
+
 extern void Destory_sock(void);
 extern MPP_RET mpp_ctx_deinit(MPP_ENC_DATA_S **data);
 
@@ -83,12 +91,67 @@ union {
 
 #define ENDIANNESS ((char)endian_test.l)
 
-void signal_func(int event) { 
+void signal_brokenpipe(int event) { 
+}
+
+pthread_t *distribute_thread()
+{
+    pthread_t * pid = NULL;
+    for(int i = 0; i < MaxThreadNum; i++)
+    {
+        if(g_PthreadId[i]>0)
+        {
+            continue;
+        }
+        pid = &g_PthreadId[i];
+        break;
+    }
+    if(NULL == pid)
+    {
+        toupcam_log_f(LOG_ERROR, "unable to distribute thread.");
+    }
+    return pid;
+}
+
+int distribute_process()
+{
+    int i;
+    for (i = 0; i < g_uiProcess_num; i++)
+    {
+        if(g_puiProcess_task[i] > 0)
+        {
+            continue;
+        }
+        g_puiProcess_task[i] = 1;
+        break;
+    }
+
+    if(i == g_uiProcess_num)
+    {
+        toupcam_log_f(LOG_WARNNING, "unable to distribute process, because of Max process:%d", i);
+        i = -1;
+    }
+    
+    return i;
+}
+
+void signal_interrupt(int event)
+{
+    if(SIGINT == event)
+    {
+        sleep(5);
+        toupcam_log(LOG_INFO, "main exit, os reboot in the future.");
+        sleep(10);
+        system("/sbin/reboot");
+        //exit(0);
+    }
 }
 
 void timer_handler(int signo)
 {
     static char c = '\\';
+    static unsigned char ucbreak = 0;
+    static unsigned char ucframenum = 0;
 	double dSize = 0;
 	char cmb = 'k';
     if('\\' == c)
@@ -103,6 +166,19 @@ void timer_handler(int signo)
     {
         c = '/';
     }
+
+    ucbreak++;
+    ucframenum += frame_num;
+    if(4 == ucbreak)
+    {
+        if(0 == ucframenum)
+        {
+            raise(SIGINT);
+        }
+        ucframenum = 0;
+        ucbreak = 0;
+    }
+    
    	if(frame_size > 0)
     {
         pthread_mutex_trylock(&g_PthreadMutexUDP);
@@ -164,7 +240,14 @@ int init_signals(void)
 {
     int iRet = ERROR_SUCCESS;
 
-    if(SIG_ERR == signal(SIGPIPE,signal_func))
+    if(SIG_ERR == signal(SIGPIPE, signal_brokenpipe))
+    {
+        toupcam_log_f(LOG_ERROR, "%s", strerror(errno));
+        iRet = ERROR_FAILED;
+        goto exit0_;
+    }
+
+    if(SIG_ERR == signal(SIGINT, signal_interrupt))
     {
         toupcam_log_f(LOG_ERROR, "%s", strerror(errno));
         iRet = ERROR_FAILED;
@@ -176,7 +259,7 @@ int init_signals(void)
     {
         iRet = ERROR_FAILED;
         goto exit0_;
-    }    
+    }
 
 exit0_:
 
@@ -196,7 +279,11 @@ void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx)
         case TOUPCAM_EVENT_IMAGE:
             memset(g_pImageData, 0, sizeof(g_pstTouPcam->m_header.biSizeImage));
             hr = Toupcam_PullImageV2(g_hcam, g_pImageData, 24, &info);
-            
+
+            /* 算法处理 */
+#ifdef PICTURE_ARITHMETIC
+            hr += image_arithmetic_handle_rgb((unsigned char *)g_pImageData, g_pstTouPcam->inWidth, g_pstTouPcam->inHeight, 24);
+#endif
             if (FAILED(hr))
                 toupcam_log_f(LOG_INFO, "failed to pull image, hr = %08x\n", hr);
             else
@@ -316,6 +403,20 @@ void *pthread_link_task1(void *argv)
         return NULL;
     }
 
+    cpu_set_t mask;
+
+    int processid = distribute_process();
+    if(-1 != processid)
+    {
+        CPU_ZERO(&mask);
+        CPU_SET(processid, &mask);
+        if (pthread_setaffinity_np(pthread_self(), sizeof(mask), &mask) < 0)
+        {
+            toupcam_log_f(LOG_WARNNING, "%s", strerror(errno));
+        }
+        toupcam_log_f(LOG_INFO, "thread id(%d) use process(%d)", (int)pthread_self(), processid);
+    }
+
     int iNum = 0;
     int iLen = 0;
     int fd = *(int *)argv;
@@ -403,10 +504,15 @@ void link_task()
 {
     int ifd = 0;
 
-    pthread_t  pt;
+    pthread_t  *pid = NULL;
 
     /* create link task */
-    pthread_create(&pt, NULL, pthread_link_task1, (void *)&ifd);
+    pid = distribute_thread();
+    if(NULL == pid)
+    {
+        return;
+    }
+    pthread_create(pid, NULL, pthread_link_task1, (void *)&ifd);
 
     //pthread_join(pt, NULL);
 
@@ -420,6 +526,20 @@ void *pthread_server(void *pdata)
     TOUPCAM_COMMON_REQUES_S stToupcam_common_req;
     struct sockaddr stClientaddr;
     socklen_t addrlen = sizeof(struct sockaddr_in);
+    cpu_set_t mask;
+
+    int processid = distribute_process();
+    if(-1 != processid)
+    {
+        CPU_ZERO(&mask);
+        CPU_SET(processid, &mask);
+        if (pthread_setaffinity_np(pthread_self(), sizeof(mask), &mask) < 0)
+        {
+            toupcam_log_f(LOG_WARNNING, "%s", strerror(errno));
+        }
+        toupcam_log_f(LOG_INFO, "thread id(%d) use process(%d)", (int)pthread_self(), processid);
+    }
+    
     if(sock1->local < 0)
     {
         toupcam_log_f(LOG_INFO, "socket fd(%d).\n", sock1->local);
@@ -523,6 +643,7 @@ void *pthread_server(void *pdata)
                     else
                     {
                         toupcam_log_f(LOG_INFO, "sock unconnect...\n");
+                        g_pstTouPcam->SaveConfigure(g_pstTouPcam);
                         FD_CLR(i, &rdfs);
                         close(i);
                     }
@@ -537,6 +658,20 @@ void *pthread_server(void *pdata)
 void *pthread_health_monitor(void *pdata)
 {
     HRESULT hr;
+    cpu_set_t mask;
+
+    int processid = distribute_process();
+    if(-1 != processid)
+    {
+        CPU_ZERO(&mask);
+        CPU_SET(processid, &mask);
+        if (pthread_setaffinity_np(pthread_self(), sizeof(mask), &mask) < 0)
+        {
+            toupcam_log_f(LOG_WARNNING, "%s", strerror(errno));
+        }
+        toupcam_log_f(LOG_INFO, "thread id(%d) use process(%d)", (int)pthread_self(), processid);
+    }
+
     while(1)
     {
         sleep(5*60);
@@ -629,12 +764,23 @@ void Destory_Toupcam(void)
         g_pStaticImageData = NULL;
     }
 
+    if(g_pstToupcamHashTable)
+    {
+        destoryHash(g_pstToupcamHashTable);
+    }
+
+    if(g_puiProcess_task)
+    {
+        free(g_puiProcess_task);
+        g_puiProcess_task = NULL;
+    }
+#if 0
     if(g_pstTouPcam)
     {
         free(g_pstTouPcam);
         g_pstTouPcam = NULL;
     }
-        
+#endif   
 }
 
 int init_sock(void)
@@ -661,6 +807,29 @@ int init_sock(void)
     {
         toupcam_log_f(LOG_INFO, "stream sock init is not ok.\n");
     }
+
+	return iRet;
+}
+
+int init_cpu(void)
+{
+    int iRet = ERROR_SUCCESS;
+    int num = sysconf(_SC_NPROCESSORS_CONF);
+    if(num <= 0)
+    {
+        toupcam_log_f(LOG_ERROR, "there is no cpu");
+        return ERROR_FAILED;
+    }
+
+    unsigned int *puiProcessTask = (unsigned int*)malloc(sizeof(unsigned int)*num);
+    if(NULL == puiProcessTask)
+    {
+        toupcam_log_f(LOG_ERROR, "%s", strerror(errno));
+        return ERROR_FAILED;
+    }
+    memset(puiProcessTask, 0, sizeof(unsigned int)*num);
+    g_uiProcess_num = num;
+    g_puiProcess_task = puiProcessTask;
 
 	return iRet;
 }
@@ -693,25 +862,59 @@ static int SetupToupcam(void)
 {
     unsigned int iRet = ERROR_SUCCESS;
     TOUPCAM_S *pstTouPcam = NULL;
+    FILE * pFile = NULL;
+    HRESULT hr;
+    TOUPCAM_S stToupcam;
+    char cPathCfg[128] = {0};
+    snprintf(cPathCfg, 128, "%s%s", TOUPCAM_CFG_PATH, TOUCPAM_CFG_NAME);
     iRet = init_Toupcam((void *)g_pstTouPcam);
     iRet += g_pstTouPcam->OpenDevice();
     if(ERROR_FAILED == iRet)
     {
         return ERROR_FAILED;
     }
-
     iRet = g_pstTouPcam->PreInitialDevice((void *)g_pstTouPcam);
     if(ERROR_FAILED == iRet)
     {
         return ERROR_FAILED;
-    }
-
-    iRet = g_pstTouPcam->ConfigDevice((void *)g_pstTouPcam);
-    if(ERROR_FAILED == iRet)
+    }  
+    /*
+    * 增加配置导入
+    */
+    if(NULL != (pFile = fopen(cPathCfg, "r")))
     {
-        return ERROR_FAILED;
-    }
+        fclose(pFile);
+        hr = toupcam_cfg_read(cPathCfg, g_pstToupcamHashTable, CFG_TO_NVR_DATA);
+        if(FAILED(hr))
+        {
+            toupcam_log_f(LOG_ERROR, "read cfg failed!\n");
+            return ERROR_FAILED;
+        }
+        
+        hr = toupcam_parse_cfg(g_pstToupcamHashTable, CFG_TO_NVR_DATA);
+        if(FAILED(hr))
+        {
+            toupcam_log_f(LOG_ERROR, "parse cfg failed!\n");
+            return ERROR_FAILED;
+        }
 
+        hr = g_pstTouPcam->putReloadercfg(g_pstTouPcam, RELOADERBEFORE);
+        if(FAILED(hr))
+        {
+            toupcam_log_f(LOG_ERROR, "reloader cfg failed!\n");
+            return ERROR_FAILED;
+        }
+    }
+    else
+    {
+        /* disable cfg */
+        g_pstTouPcam->cfg = 0;
+        iRet = g_pstTouPcam->ConfigDevice((void *)g_pstTouPcam);
+        if(ERROR_FAILED == iRet)
+        {
+            return ERROR_FAILED;
+        }
+    }
     iRet = g_pstTouPcam->StartDevice((void *)g_pstTouPcam);
     if(ERROR_FAILED == iRet)
     {
@@ -731,6 +934,7 @@ int main(int, char**)
 	int inWidth = 0, inHeight = 0;
     int iPthredArg = 0;
     int iRet = 0;
+    pthread_t *pid = NULL;
 
     iRet = init_toupcam_log();
     if(ERROR_FAILED == iRet)
@@ -743,6 +947,13 @@ int main(int, char**)
     if(ERROR_FAILED == iRet)
     {
         goto exit0_;
+    }
+
+    /* 检查CPU核数,初始化资源管理器             */
+    iRet = init_cpu();
+    if(ERROR_FAILED == iRet)
+    {
+        goto exit1_;
     }
 
     /* 大小端检测 */
@@ -760,18 +971,35 @@ int main(int, char**)
     semaphore_inits();
     
     /* tcp server thread */
-    iRet = pthread_create(&g_PthreadId[0], NULL, pthread_server, (void *)&iPthredArg);
+    pid = distribute_thread();
+    if(NULL == pid)
+    {
+        goto exit0_;
+    }
+    iRet = pthread_create(pid, NULL, pthread_server, (void *)&iPthredArg);
 
 	/* toupcam health's monitor thread */
-    iRet += pthread_create(&g_PthreadId[1], NULL, pthread_health_monitor, (void *)&iPthredArg);
+    pid = distribute_thread();
+    if(NULL == pid)
+    {
+        goto exit0_;
+    }
+    iRet += pthread_create(pid, NULL, pthread_health_monitor, (void *)&iPthredArg);
     if(ERROR_FAILED == iRet)
     {
         goto exit0_;
     }
 
-    /* 初始化信号 */
+    /* 初始化信号 */    
     iRet = init_signals();
     if(ERROR_FAILED == iRet)
+    {
+        goto exit0_;
+    }
+
+    /* 初始化配置保存 */
+    g_pstToupcamHashTable = createHash();
+    if(NULL == g_pstToupcamHashTable)
     {
         goto exit0_;
     }

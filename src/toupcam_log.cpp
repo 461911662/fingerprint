@@ -12,7 +12,7 @@
 #define MODULE_TAG "toupcam"
 typedef void (*toupcam_log_callback)(const char*, const char*, va_list);
 
-unsigned int toupcam_debug = 1;
+unsigned int toupcam_debug = 0;
 
 static const char *msg_log_warning = "log message is long\n";
 static const char *msg_log_nothing = "\n";

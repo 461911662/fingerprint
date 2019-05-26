@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
+#include <signal.h>
 #include <pthread.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -185,7 +186,7 @@ static int snapshot(int fd, void *pdata)
                     }
                 }
                 /* fwrite(pBuffer, isize, 1, fp); */
-    
+                usleep(10000);
 				pucJpgDest += isize;
 				iTotalSize -= isize;
             }
@@ -324,6 +325,9 @@ static int setbrightness(int fd, void *pdata)
     {
         usBrightness = pstToupcamReq->data.brightness;
     }
+
+    /* 亮度补偿 */
+    usBrightness = usBrightness;
 
     if(g_pstTouPcam->stTexpo.AnMin > usBrightness || g_pstTouPcam->stTexpo.AnMax < usBrightness)
     {
@@ -858,10 +862,12 @@ static int sethistogram(int fd, void *pdata)
         if(!iEndianness)
         {
             stHistoram.aLow[i] = BIGLITTLESWAP16(pstToupcamReq->data.historam.aLow[i]);
+            stHistoram.aHigh[i] = BIGLITTLESWAP16(pstToupcamReq->data.historam.aHigh[i]);
         }
         else
         {
             stHistoram.aLow[i] = pstToupcamReq->data.historam.aLow[i];
+            stHistoram.aHigh[i] = pstToupcamReq->data.historam.aHigh[i];
         }
     }    
 
@@ -900,7 +906,7 @@ static int sethistogram(int fd, void *pdata)
     else
     {
         pthread_mutex_unlock(&g_pstTouPcam->stHistoram.mutex);
-        printf("not set histogram,because of this is manu mode!!!\n");
+        printf("not set histogram,because of this is auto mode!!!\n");
         goto _exit0;
     }
     pthread_mutex_unlock(&g_pstTouPcam->stHistoram.mutex);
@@ -970,6 +976,49 @@ _exit0:
     return ERROR_FAILED;     
 }
 
+static int resetserver(int fd, void *pdata)
+{
+    if(fd < 0 || NULL == pdata)
+    {
+        printf("%s: input param is invaild.\n", __func__);
+        return ERROR_FAILED;
+    }
+
+    HRESULT hr = ERROR_SUCCESS;
+    TOUPCAM_COMMON_RESPON_S stToupcamRespon;
+    TOUPCAM_COMMON_REQUES_S *pstToupcamReq = (TOUPCAM_COMMON_REQUES_S *)pdata;
+
+    fillresponheader(&stToupcamRespon);
+    stToupcamRespon.com.subcmd = CMD_RESETSERVER;
+    stToupcamRespon.com.size[0] = INVAILD_BUFF_SIZE;
+
+    if(TCP_REQUEST != pstToupcamReq->com.type)
+    {
+        printf("%s: please send the correct request type.\n", __func__);
+        hr = ERROR_FAILED;
+        goto _exit0;
+    }
+
+    hr = raise(SIGINT);
+    if(ERROR_SUCCESS != hr)
+    {
+        printf("%s:%s", __func__, strerror(errno));
+        hr = ERROR_FAILED;
+        goto _exit0;
+    }
+    
+    stToupcamRespon.com.size[0] = TOUPCAM_COMMON_RESPON_HEADER_SIZE;    
+    send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE, 0);
+    return ERROR_SUCCESS;
+
+
+_exit0:
+    stToupcamRespon.cc = ERROR_FAILED;
+    send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE, 0);
+
+    return hr;
+}
+
 int common_toupcam_cmd(int fd, void *pdata, unsigned short usSize)
 {
     if(fd < 0 || NULL == pdata)
@@ -1015,6 +1064,8 @@ int common_toupcam_cmd(int fd, void *pdata, unsigned short usSize)
             return sethistogram(fd, pdata);
         case CMD_TOTALDATA:
             return syncserverdata(fd, pdata);
+        case CMD_RESETSERVER:
+            return resetserver(fd, pdata);
         default:
             return NOTSUPPORT;
     }

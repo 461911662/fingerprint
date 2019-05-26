@@ -8,9 +8,16 @@
 #define REQUES_SIZE  (128)
 #define ARRAY_SIZE(a) sizeof(a)/sizeof(a[0])
 
-#undef SOFT_ENCODE_H264
-#define MPP_FRAME_MAXNUM 2000
+#define SOFT_ENCODE_H264
+#define MPP_FRAME_MAXNUM 1000000000000
 #define ROI_IMAGE
+#undef TOUPCAM_RELEASE
+
+#define RELOADERBEFORE   0
+#define RELOADERAFTER    1
+
+#define TOUPCAM_CFG_PATH  "/var/opt/toupcam_cfg"
+#define TOUCPAM_CFG_NAME  "/toupcam.cfg"
 
 #define END_BUFF_SIZE         (0)
 #define INVAILD_BUFF_SIZE     (1)
@@ -36,6 +43,7 @@ enum TOUPCAM_CMD_E{
     CMD_HISTOGRAM,          /* 直方图调节 */
     CMD_TOTALDATA,          /* 获取服务器当前配置参数 */
     CMD_DATATSM,            /* TCP UDP直传 */
+    CMD_RESETSERVER,        /* 重启服务器 */
     /* wifi cfg */
     CMD_SETUDPADDR = 128,         /* UDP 设置客户端地址 */
 };
@@ -168,6 +176,17 @@ typedef struct TWhiteBalance{
     pthread_mutex_t mutex;          /* 设置白平衡保护锁 */
 }TWHITEBALANCE_S;
 
+typedef struct BlackBalanace{
+    int iauto;                      /* 黑平衡自动使能 */
+    union{
+        unsigned short ROff;        /* 黑平衡Red 偏移 */
+        unsigned short GOff;        /* 黑平衡Green 偏移 */
+        unsigned short BOff;        /* 黑平衡Blue 偏移 */
+        unsigned short aSub[3];
+    }OffVal;
+    pthread_mutex_t mutex;          /* 设置黑平衡保护锁 */
+}BLACKBALANCE_S;
+
 typedef struct  Historam
 {
     unsigned char bAutoHis;               /* 设置直方图自动手动模式 */
@@ -206,6 +225,7 @@ typedef struct Toupcam
     int iHFlip;                         /* 水平翻转 */
     TEXPO_S stTexpo;                    /* 相机曝光参数设置 */
     TWHITEBALANCE_S stWhiteBlc;     /* 相机白平衡参数 */
+    BLACKBALANCE_S stBlackBlc;      /* 相机黑平衡参数 */
     TCOLOR_S stTcolor;                  /* 相机颜色参数设置 */
     HISTORAM_S stHistoram;              /* 相机直方图参数 */
 
@@ -213,6 +233,9 @@ typedef struct Toupcam
     int m_sample;                   /* skip or bin */
     int m_nHz;                      /* 交流50Hz,交流60Hz,直流 */
 
+    int cfg;                        /* cfg enable:disable */
+
+    unsigned int udp_ipv4;          /* mobile ip */
 #if 0    
     union mode_color{                   /* 色彩模式 */   
         struct mode{
@@ -250,6 +273,9 @@ typedef struct Toupcam
     unsigned int (*StartDevice)(void *);
     unsigned int (*CloseDevice)(void *);
     unsigned int (*SufInitialDevice)(void*);
+    unsigned int (*SaveConfigure)(void*);
+    unsigned int (*getReloadercfg)(void*, int);
+    unsigned int (*putReloadercfg)(void*, int);
 
     /* event */
     void (*OnEventError)(void);

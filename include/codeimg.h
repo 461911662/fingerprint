@@ -37,6 +37,7 @@ extern pthread_mutex_t g_PthreadMutexJpgDest;
 
 extern void encode_yuv(unsigned char *g_pImageData);
 extern void encode2hardware(unsigned char *g_pImageData);
+extern int image_arithmetic_handle_rgb(unsigned char *g_pImageData, int height, int width, int bit);
 extern int encode_jpeg(unsigned char *pucImageData);
 extern void initX264Encoder(X264Encoder &px264Encoder, const char *filePath);
 

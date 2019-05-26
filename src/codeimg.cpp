@@ -208,8 +208,8 @@ MPP_RET mpp_setup(MPP_ENC_DATA_S *p)
     rc_cfg = &p->rc_cfg;
 
     /* setup default parameter */
-    p->fps = 10;
-    p->gop = 5;
+    p->fps = 30;
+    p->gop = 30;
     p->bps = p->width * p->height / 8 * p->fps;
 
     prep_cfg->change        = MPP_ENC_PREP_CFG_CHANGE_INPUT |
@@ -229,8 +229,10 @@ MPP_RET mpp_setup(MPP_ENC_DATA_S *p)
     }
 
     rc_cfg->change  = MPP_ENC_RC_CFG_CHANGE_ALL;
-    rc_cfg->rc_mode = MPP_ENC_RC_MODE_CBR;
-    rc_cfg->quality = MPP_ENC_RC_QUALITY_MEDIUM;
+    //rc_cfg->rc_mode = MPP_ENC_RC_MODE_CBR;
+    //rc_cfg->quality = MPP_ENC_RC_QUALITY_MEDIUM;
+    rc_cfg->rc_mode = MPP_ENC_RC_MODE_VBR;
+    rc_cfg->quality = MPP_ENC_RC_QUALITY_CQP;
 
     if (rc_cfg->rc_mode == MPP_ENC_RC_MODE_CBR) 
     {
@@ -244,9 +246,12 @@ MPP_RET mpp_setup(MPP_ENC_DATA_S *p)
         if (rc_cfg->quality == MPP_ENC_RC_QUALITY_CQP) 
         {
             /* constant QP does not have bps */
-            rc_cfg->bps_target   = -1;
-            rc_cfg->bps_max      = -1;
-            rc_cfg->bps_min      = -1;
+            //rc_cfg->bps_target   = -1;
+            //rc_cfg->bps_max      = -1;
+            //rc_cfg->bps_min      = -1;
+            rc_cfg->bps_target   = p->bps;
+            rc_cfg->bps_max      = p->bps * 17 / 16;
+            rc_cfg->bps_min      = p->bps * 1 / 16;
         } 
         else 
         {
@@ -457,6 +462,99 @@ INIT_MPP_OUT:
     }
 }
 
+static unsigned char GetGray(unsigned char *pImageData, int nheight, int nwidth)
+{
+    if(NULL == pImageData || nheight < 0 || nwidth < 0)
+    {
+        toupcam_log_f(LOG_ERROR, "input ptr is null");
+        return 0;
+    }
+
+    unsigned char gray = 0;
+    unsigned char *pucImageData = pImageData+nwidth*3*nheight+nwidth*3;
+    /* 方法1: Gray = (R*30 + G*59 + B*11 + 50) / 100 */
+    /* 方法2: Gray = (R*38 + G*75 + B*15) >> 7 */
+    gray = (*pucImageData*38 + *(pucImageData+1)*75 + *(pucImageData+2)*15)>>7;
+    /*
+    gray = (*pucImageData + *(pucImageData+1) + *(pucImageData+2))/3;
+    */
+    return gray;
+}
+
+static unsigned char linetran(unsigned char *pImageData, int nheight, int nwidth, double fa, double fb)
+{
+    if(NULL == pImageData || nheight < 0 || nwidth < 0)
+    {
+        toupcam_log_f(LOG_ERROR, "input ptr is null");
+        return 0;
+    }
+
+    int target = 0;
+    unsigned char gray = 0;
+    unsigned char *pucImageData = NULL;
+
+    for (int i = 0; i < nheight; ++i)
+    {
+        for (int j = 0; j < nwidth; ++j)
+        {
+            gray = GetGray(pImageData, i, j);
+            target = fa*gray + fb;
+            if(target < 0)
+            {
+                target = 0;
+            }
+            else if(target > 255)
+            {
+                target = 255;
+            }
+            pucImageData = pImageData + i*j*3 + j*3;
+            *pucImageData++ = target;
+            *pucImageData++ = target;
+            *pucImageData = target;
+        }
+    }    
+    return 0;
+}
+
+int image_arithmetic_handle_rgb(unsigned char *pImageData, int height, int width, int bit)
+{
+    int iRet = ERROR_SUCCESS;
+    int i, j;
+    if(NULL == pImageData || height < 0 || width < 0)
+    {
+        toupcam_log_f(LOG_ERROR, "input ptr is null");
+        return -1;
+    }
+
+    if(bit != 24)
+    {
+        toupcam_log_f(LOG_ERROR, "bit is not 24");
+        return -1;
+    }
+    
+    unsigned char gray = 0;
+    unsigned char *pucImageData = NULL;
+    /* 灰度值归一化 */
+    /* 线性灰度变换 */
+    linetran(pImageData, height, width, -1, 255);
+    /*
+    for (i = 0; i < height; ++i)
+    {
+        for (j = 0; j < width; ++j)
+        {
+            gray = GetGray(pImageData, i, j);
+            pucImageData = pImageData + i*j*3+ j*3;
+            *pucImageData++ = gray;
+            *pucImageData++ = gray;
+            *pucImageData = gray;
+        }
+    }
+    */
+
+    return 0;
+}
+
+
 void encode_yuv(unsigned char *g_pImageData)
 {
     int width = nWidth, height = nHeight;
@@ -654,6 +752,8 @@ static unsigned int rtp_transmit(void *ptr, void *rsppsp, size_t len, size_t len
     repeatencode2h264((char *)ptr, rsppsp, &ilen, len0);
 
     struct rtp_data *pdata;
+	pthread_mutex_lock(&g_PthreadMutexUDP);
+	frame_size = 0;
 	for (int i = 0; i < x264Encoder.m_x264iNal; ++i)
 	{
         pdata=(struct rtp_data *)malloc(sizeof(struct rtp_data));
@@ -662,6 +762,7 @@ static unsigned int rtp_transmit(void *ptr, void *rsppsp, size_t len, size_t len
         pdata->datalen=x264Encoder.m_pX264Nals[i].i_payload;
         unsigned char *rtpdata = (unsigned char *)malloc(pdata->datalen);
         memcpy(rtpdata, x264Encoder.m_pX264Nals[i].p_payload, pdata->datalen);
+        frame_size += pdata->datalen;
         pdata->buff=rtpdata;
     	pdata->bufrelen=0;
 		/* printf("buff len : %d\r\n", pdata->datalen); */
@@ -678,7 +779,6 @@ static unsigned int rtp_transmit(void *ptr, void *rsppsp, size_t len, size_t len
             }
         	/* 序列号增加 */
         	head.sernum++;
-        	/* usleep(500); */
 			/* printf("Send Num : %d\r\n", sendnum++); */
     	}
         
@@ -704,10 +804,12 @@ static unsigned int rtp_transmit(void *ptr, void *rsppsp, size_t len, size_t len
         free(x264Encoder.m_pX264Nals);
         x264Encoder.m_pX264Nals = NULL;
     }
+    usleep(800);
 
     /* 时间戳增加 */
     head.timtamp+=800;
     /* usleep(1*1000*1000); */
+    pthread_mutex_unlock(&g_PthreadMutexUDP);
 
     return iRet;
 }
@@ -895,7 +997,7 @@ MPP_RET mpp_encode(MPP_ENC_DATA_S *p, unsigned char *yuv, unsigned long len)
             memcpy(pch264spspps, ptr, len0);
             if (p->fp_output)
             {
-                //fwrite(ptr, 1, len, p->fp_output);
+                //fwrite(ptr, 1, len0, p->fp_output);
                 //fclose(p->fp_output);
                 //printf("write finished.\n");
             }
@@ -950,7 +1052,7 @@ MPP_RET mpp_encode(MPP_ENC_DATA_S *p, unsigned char *yuv, unsigned long len)
         void *ptr   = mpp_packet_get_pos(packet);
         size_t len  = mpp_packet_get_length(packet);
 
-        if(0 == p->frame_count%10)
+        if(0 == p->frame_count%30)
         {
             //fwrite(pch264spspps, 1, 45, p->fp_output);
             rtp_transmit(ptr, pch264spspps, len, len0);
@@ -961,7 +1063,7 @@ MPP_RET mpp_encode(MPP_ENC_DATA_S *p, unsigned char *yuv, unsigned long len)
         }
 
         if (p->fp_output)
-            //fwrite(ptr, 1, len, p->fp_output);
+            fwrite(ptr, 1, len, p->fp_output);
         mpp_packet_deinit(&packet);
 
         //printf("encoded frame %d size %d\n", p->frame_count, len);
@@ -988,8 +1090,41 @@ void encode2hardware(unsigned char *g_pImageData)
         perror("encode2hardware");
         return;
     }
-    grb24toyuv420p(g_pImageData, g_pstTouPcam->inWidth, g_pstTouPcam->inHeight, pucyuvBuf, &len);
+    
+    //grb24toyuv420p(g_pImageData, g_pstTouPcam->inWidth, g_pstTouPcam->inHeight, pucyuvBuf, &len);
     //printf("yuv420 len:%d\n", len);
+
+    int width = nWidth, height = nHeight;
+    enum AVPixelFormat src_pix_fmt = AV_PIX_FMT_BGR24, dst_pix_fmt = AV_PIX_FMT_YUV420P;
+
+    AVFrame *pFrameYUV = (AVFrame *)av_frame_alloc();
+    uint8_t *out_buffer = new uint8_t[avpicture_get_size(dst_pix_fmt, width, height)];
+    
+    /* avpicture_fill是给pFrameYUV初始化一些字段，并且给填充data和linesize */
+    avpicture_fill((AVPicture *)pFrameYUV, out_buffer, dst_pix_fmt, width, height);
+
+    AVFrame *rgbFrame = (AVFrame *)av_frame_alloc();
+
+    avpicture_fill((AVPicture *)rgbFrame, g_pImageData, src_pix_fmt, width, height);
+
+    SwsContext *sws_ctx = sws_getContext(
+        width, height, src_pix_fmt,
+        width, height, dst_pix_fmt,
+        SWS_BILINEAR, NULL, NULL, NULL);
+
+    sws_scale(sws_ctx, rgbFrame->data, rgbFrame->linesize, 0, height, pFrameYUV->data, pFrameYUV->linesize);
+    sws_freeContext(sws_ctx);
+	av_frame_free(&rgbFrame);
+    int iy_size = width * height;
+    memset(pucyuvBuf, 0, g_pstTouPcam->inHeight*g_pstTouPcam->inWidth*2);
+    memcpy(pucyuvBuf, pFrameYUV->data[0], iy_size);
+    memcpy(pucyuvBuf+iy_size, pFrameYUV->data[1], iy_size/4);
+    memcpy(pucyuvBuf+iy_size+iy_size/4, pFrameYUV->data[2], iy_size/4);
+	av_frame_free(&pFrameYUV);
+    free(out_buffer);
+    len = iy_size + iy_size/2;
+    pFrameYUV = NULL;
+    out_buffer = NULL;
 
 #if 0        
     FILE *fp = fopen("./mcamera.yuv", "ab+");

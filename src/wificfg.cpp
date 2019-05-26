@@ -53,6 +53,19 @@ static int setudpaddr(int fd, void *pdata)
         goto _exit0;
 #endif
 
+    if(uiIPV4Addr == sock->cliaddr[0]->sin_addr.s_addr)
+    {
+        stToupcamRespon.cc = ERROR_WIFI_ADDR_EXIST;
+    }
+    else
+    {
+        sock->cliaddr[0]->sin_addr.s_addr = uiIPV4Addr;
+        sock->cliaddr[1]->sin_addr.s_addr = uiIPV4Addr;
+        g_pstTouPcam->udp_ipv4 = uiIPV4Addr;
+        stToupcamRespon.cc = ERROR_SUCCESS;
+    }
+    
+/*
     uiIPV4Def = inet_addr(CLIENT_IP);
     if(uiIPV4Def == sock->cliaddr[0]->sin_addr.s_addr)
     {
@@ -64,6 +77,7 @@ static int setudpaddr(int fd, void *pdata)
         {
             sock->cliaddr[0]->sin_addr.s_addr = uiIPV4Addr;
             sock->cliaddr[1]->sin_addr.s_addr = uiIPV4Addr;
+            g_pstTouPcam->udp_ipv4 = uiIPV4Addr;
             stToupcamRespon.cc = ERROR_SUCCESS;
         }
     }
@@ -71,9 +85,10 @@ static int setudpaddr(int fd, void *pdata)
     {
         stToupcamRespon.cc = ERROR_WIFI_ADDR_HOLD;
         sock->cliaddr[0]->sin_addr.s_addr = uiIPV4Def;
-        sock->cliaddr[1]->sin_addr.s_addr = uiIPV4Addr;
+        sock->cliaddr[1]->sin_addr.s_addr = uiIPV4Def;
+        g_pstTouPcam->udp_ipv4 = uiIPV4Def;
     }
-
+*/
     stToupcamRespon.com.size[0] = COMMON_BUFF_SIZE;
     iRet = send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE, 0);
     if(iRet <= 0)
