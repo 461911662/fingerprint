@@ -1063,7 +1063,7 @@ MPP_RET mpp_encode(MPP_ENC_DATA_S *p, unsigned char *yuv, unsigned long len)
         }
 
         if (p->fp_output)
-            fwrite(ptr, 1, len, p->fp_output);
+            //fwrite(ptr, 1, len, p->fp_output);
         mpp_packet_deinit(&packet);
 
         //printf("encoded frame %d size %d\n", p->frame_count, len);
@@ -1143,6 +1143,7 @@ void encode2hardware(unsigned char *g_pImageData)
     {
         printf("mpp_encode failed ret %d\n", ret);
     }
+
 
     free(pucyuvBuf);
     pucyuvBuf = NULL;

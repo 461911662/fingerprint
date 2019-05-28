@@ -6,6 +6,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <sched.h>
 #include <pthread.h>
 #include <unistd.h>
@@ -477,7 +479,7 @@ void *pthread_link_task1(void *argv)
         memcpy(pcfinger, g_pstTouPcam->stHistoram.aHistB, sizeof(g_pstTouPcam->stHistoram.aHistB)); 
 #endif
         sem_post(&g_SemaphoreHistoram);
-        usleep(500000);
+        sleep(1);
 
         iLen = sizeof(g_pstTouPcam->stHistoram.aHistY)*4+TOUPCAM_COMMON_RESPON_HEADER_SIZE;
 
@@ -564,7 +566,7 @@ void *pthread_server(void *pdata)
 		}
 		else if(iRet < 0)
 		{
-			toupcam_log_f(LOG_INFO, "select fail.\n");
+			//toupcam_log_f(LOG_INFO, "select fail.\n");
 			continue;
 		}
 		for(i = 0; i < iMaxfd+1; i++)
@@ -926,6 +928,62 @@ static int SetupToupcam(void)
     return ERROR_SUCCESS;
 }
 
+int daemon(int nochdir,int noclose)
+{
+	pid_t pid;
+ 
+	/* 父进程产生子进程 */
+	pid = fork();
+	if (pid < 0)
+	{
+		perror("fork");
+		return -1;
+	}
+    
+	/* 父进程退出运行 */
+	if (pid != 0)
+	{
+		exit(0);
+	}
+    
+	/* 创建新的会话 */
+	pid = setsid();
+	if (pid < -1)
+	{
+		perror("set sid");
+		return -1;
+	}
+    
+	/* 更改当前工作目录,将工作目录修改成根目录 */
+	if (!nochdir)
+	{
+		chdir("/");
+	}
+	/* 关闭文件描述符，并重定向标准输入，输出合错误输出
+	 * 将标准输入输出重定向到空设备
+	 */
+	if (!noclose)
+	{
+		int fd;
+		fd = open("/dev/null",O_RDWR,0);
+		if (fd != -1)
+		{
+			dup2(fd,STDIN_FILENO);
+			dup2(fd,STDOUT_FILENO);
+			dup2(fd,STDERR_FILENO);
+			if (fd > 2)
+			{
+				close(fd);
+			}
+		}
+	}
+	/* 设置守护进程的文件权限创建掩码 */
+	umask(0027);
+ 
+	return 0;
+}
+
+
 /*
 * 主函数main
 */
@@ -935,6 +993,11 @@ int main(int, char**)
     int iPthredArg = 0;
     int iRet = 0;
     pthread_t *pid = NULL;
+
+    /* 开启一个守护进程 */
+#if 0
+    daemon(0, 0);
+#endif
 
     iRet = init_toupcam_log();
     if(ERROR_FAILED == iRet)

@@ -809,7 +809,7 @@ static int sethistogramtype(int fd, void *pdata)
     }
     else
     {
-        printf("cur contrast mode:%s\n", g_pstTouPcam->stHistoram.bAutoHis?"auto":"manu");
+        printf("cur histogram mode:%s\n", g_pstTouPcam->stHistoram.bAutoHis?"auto":"manu");
     }
     pthread_mutex_unlock(&g_pstTouPcam->stHistoram.mutex);
     

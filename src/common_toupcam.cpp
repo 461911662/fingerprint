@@ -615,8 +615,22 @@ unsigned int ConfigDevice(void *pvoid)
         toupcam_log_f(LOG_ERROR, "get power source Hz failed.\n");
         return ERROR_FAILED;
     }
-    toupcam_dbg_f(LOG_DEBUG, "power source :%s.", g_pstTouPcam->m_nHz?(g_pstTouPcam->m_nHz == 1?"50Hz":"direct-currnet"):"60Hz");
-    
+
+    if(g_pstTouPcam->m_nHz != TOUPCAM_POWER_AC_50HZ)
+    {
+        toupcam_dbg_f(LOG_INFO, "power source is not AC 50Hz(%dHz)", g_pstTouPcam->m_nHz);
+        g_pstTouPcam->m_nHz = TOUPCAM_POWER_AC_50HZ;
+        iRet = Toupcam_put_HZ(g_pstTouPcam->m_hcam, g_pstTouPcam->m_nHz);
+        if(SUCCEEDED(iRet))
+        {
+            toupcam_dbg_f(LOG_INFO, "current power source is AC 50Hz");
+        }
+    }
+    else
+    {
+        toupcam_dbg_f(LOG_DEBUG, "power source :%s.", g_pstTouPcam->m_nHz?(g_pstTouPcam->m_nHz == 1?"50Hz":"direct-currnet"):"60Hz");
+    }
+        
     return ERROR_SUCCESS;
 
 
@@ -904,6 +918,7 @@ static unsigned int Set_ReBlackBalanceToupcam()
     pthread_mutex_init(&g_pstTouPcam->stBlackBlc.mutex, NULL);
     pthread_mutex_lock(&g_pstTouPcam->stBlackBlc.mutex);
 
+#if 0
     /* fresh data */
     g_pstTouPcam->stBlackBlc.OffVal.aSub[0] = g_pstTouPcam->stBlackBlc.OffVal.ROff;
     g_pstTouPcam->stBlackBlc.OffVal.aSub[1] = g_pstTouPcam->stBlackBlc.OffVal.GOff;
@@ -918,6 +933,7 @@ static unsigned int Set_ReBlackBalanceToupcam()
     toupcam_dbg_f(LOG_INFO, "reloader cfg stBlackBlc.OffVal.ROff:%d", g_pstTouPcam->stBlackBlc.OffVal.ROff);
     toupcam_dbg_f(LOG_INFO, "reloader cfg stBlackBlc.OffVal.GOff:%d", g_pstTouPcam->stBlackBlc.OffVal.GOff);
     toupcam_dbg_f(LOG_INFO, "reloader cfg stBlackBlc.OffVal.BOff:%d", g_pstTouPcam->stBlackBlc.OffVal.BOff);
+#endif
     pthread_mutex_unlock(&g_pstTouPcam->stBlackBlc.mutex);
 
     return ERROR_SUCCESS;    
@@ -939,7 +955,7 @@ static unsigned int Set_WhiteBalanceToupcam()
 
     /* 初始化锁 */
     pthread_mutex_init(&g_pstTouPcam->stWhiteBlc.mutex, NULL);
-#if 1
+#if 0
     /* set auto white balance mode as Temp/Tint */
     /* auto white balance "one push". This function must be called AFTER Toupcam_StartXXXX */
     hr = Toupcam_AwbOnePush(g_pstTouPcam->m_hcam, fnTTProc, (void *)&iTTCtx);
@@ -1123,7 +1139,9 @@ static unsigned int Set_HistogramToupcam()
     /* 初始化直方图数据锁 */
     pthread_mutex_init(&g_pstTouPcam->stHistoram.mutex, NULL);
 
-    pthread_mutex_lock(&g_pstTouPcam->stHistoram.mutex);    
+    pthread_mutex_lock(&g_pstTouPcam->stHistoram.mutex);
+    g_pstTouPcam->stHistoram.bAutoHis = 0;
+#if 0
     /* 设置直方图为自动         */
     g_pstTouPcam->stHistoram.bAutoHis = TRUE;
     hr = Toupcam_LevelRangeAuto(g_pstTouPcam->m_hcam);
@@ -1132,7 +1150,23 @@ static unsigned int Set_HistogramToupcam()
         toupcam_log_f(LOG_ERROR, "set auto histogram failed.\n");
         return ERROR_FAILED;
     }
-    
+#endif
+    g_pstTouPcam->stHistoram.aLow[0] = 0;
+    g_pstTouPcam->stHistoram.aLow[1] = 0;
+    g_pstTouPcam->stHistoram.aLow[2] = 0;
+    g_pstTouPcam->stHistoram.aLow[3] = 104;
+
+    g_pstTouPcam->stHistoram.aHigh[0] = 255;
+    g_pstTouPcam->stHistoram.aHigh[1] = 255;
+    g_pstTouPcam->stHistoram.aHigh[2] = 255;
+    g_pstTouPcam->stHistoram.aHigh[3] = 135;
+
+    hr = Toupcam_put_LevelRange(g_pstTouPcam->m_hcam, g_pstTouPcam->stHistoram.aLow, g_pstTouPcam->stHistoram.aHigh);
+    if(FAILED(hr))
+    {
+        toupcam_log_f(LOG_ERROR, "updated histogram data failed.\n");
+        return ERROR_FAILED;
+    }
     /* 更新直方图范围 */
     hr = Toupcam_get_LevelRange(g_pstTouPcam->m_hcam, g_pstTouPcam->stHistoram.aLow, g_pstTouPcam->stHistoram.aHigh);
     if(FAILED(hr))
@@ -1167,7 +1201,7 @@ static unsigned int Set_ReHistogramToupcam()
 
     pthread_mutex_lock(&g_pstTouPcam->stHistoram.mutex);    
     /* 设置直方图为自动         */
-    if(g_pstTouPcam->stHistoram.bAutoHis)
+    if(g_pstTouPcam->stHistoram.bAutoHis == -1) /* 直方图自动不支持 */
     {
         hr = Toupcam_LevelRangeAuto(g_pstTouPcam->m_hcam);
         if(FAILED(hr))

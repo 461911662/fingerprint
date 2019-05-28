@@ -13,6 +13,10 @@
 #define ROI_IMAGE
 #undef TOUPCAM_RELEASE
 
+#define TOUPCAM_POWER_AC_60HZ       0
+#define TOUPCAM_POWER_AC_50HZ       1
+#define TOUPCAM_POWER_DC            2
+
 #define RELOADERBEFORE   0
 #define RELOADERAFTER    1
 
