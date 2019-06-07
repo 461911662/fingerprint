@@ -171,7 +171,7 @@ void timer_handler(int signo)
 
     ucbreak++;
     ucframenum += frame_num;
-    if(4 == ucbreak)
+    if(60 == ucbreak)
     {
         if(0 == ucframenum)
         {
@@ -284,7 +284,7 @@ void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx)
 
             /* 算法处理 */
 #ifdef PICTURE_ARITHMETIC
-            hr += image_arithmetic_handle_rgb((unsigned char *)g_pImageData, g_pstTouPcam->inWidth, g_pstTouPcam->inHeight, 24);
+            hr += image_arithmetic_handle_rgb((unsigned char *)g_pImageData,  g_pstTouPcam->inHeight, g_pstTouPcam->inWidth, 24);
 #endif
             if (FAILED(hr))
                 toupcam_log_f(LOG_INFO, "failed to pull image, hr = %08x\n", hr);
@@ -292,7 +292,18 @@ void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx)
             {                
                 /* After we get the image data, we can do anything for the data we want to do */
                 /* toupcam_log_f(LOG_INFO, "pull image ok, total = %u, resolution = %u x %u\n", ++g_total, info.width, info.height); */
-#ifdef SOFT_ENCODE_H264 
+                FILE *fp = fopen("mRGB.dat", "ab");
+                if(NULL == fp)
+                {
+                    toupcam_log_f(LOG_INFO, "mGRB.dat:%s", strerror(errno));
+                }
+                else
+                {
+                    fwrite(g_pImageData, g_pstTouPcam->inHeight*g_pstTouPcam->inWidth*3, 1, fp);
+                    fclose(fp);
+                }
+                
+#ifdef SOFT_ENCODE_H264
                 encode_yuv((unsigned char *)g_pImageData);
 #else
                 if(g_pstmpp_enc_data && g_pstmpp_enc_data->frame_count >= MPP_FRAME_MAXNUM)
@@ -481,7 +492,8 @@ void *pthread_link_task1(void *argv)
         sem_post(&g_SemaphoreHistoram);
         sleep(1);
 
-        iLen = sizeof(g_pstTouPcam->stHistoram.aHistY)*4+TOUPCAM_COMMON_RESPON_HEADER_SIZE;
+        /* iLen = sizeof(g_pstTouPcam->stHistoram.aHistY)*4+TOUPCAM_COMMON_RESPON_HEADER_SIZE; */
+        iLen = sizeof(g_pstTouPcam->stHistoram.aHistY)+TOUPCAM_COMMON_RESPON_HEADER_SIZE;
 
         /* pthread_mutex_lock(&g_PthreadMutexUDP); */
         if((iNum=sendto(sock->local, pcdes, iLen, 0, (struct sockaddr *)sock->cliaddr[1], sizeof(struct sockaddr_in)))==-1)
@@ -621,6 +633,14 @@ void *pthread_server(void *pdata)
 							FD_CLR(i, &tmprdfs);
 							continue;
 						}
+
+                        if(iRet != sizeof(TOUPCAM_COMMON_REQUES_S))
+                        {
+                            toupcam_log_f(LOG_INFO, "length too shorter(%d)%d.\n", iRet, sizeof(TOUPCAM_COMMON_REQUES_S));
+                            FD_CLR(i, &tmprdfs);
+                            continue;
+                        }
+
 						/*
 						*debug
 						int k;

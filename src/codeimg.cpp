@@ -18,7 +18,7 @@ extern "C"
 
 extern MPP_ENC_DATA_S *g_pstmpp_enc_data;
 
-#define VENC_FPS 10 /* 控制帧率 */
+#define VENC_FPS 30 /* 控制帧率 */
 #define M_BITRATE (2*1024*1024)  /* 控制码流 */
 #define JPEG_COMPRESS_QUILITY    (100)
 
@@ -208,8 +208,8 @@ MPP_RET mpp_setup(MPP_ENC_DATA_S *p)
     rc_cfg = &p->rc_cfg;
 
     /* setup default parameter */
-    p->fps = 30;
-    p->gop = 30;
+    p->fps = 15;
+    p->gop = 10;
     p->bps = p->width * p->height / 8 * p->fps;
 
     prep_cfg->change        = MPP_ENC_PREP_CFG_CHANGE_INPUT |
@@ -296,7 +296,7 @@ MPP_RET mpp_setup(MPP_ENC_DATA_S *p)
              * 77  - Main profile
              * 100 - High profile
              */
-            codec_cfg->h264.profile  = 100;
+            codec_cfg->h264.profile  = 66;
             /*
              * H.264 level_idc parameter
              * 10 / 11 / 12 / 13    - qcif@15fps / cif@7.5fps / cif@15fps / cif@30fps
@@ -462,16 +462,16 @@ INIT_MPP_OUT:
     }
 }
 
-static unsigned char GetGray(unsigned char *pImageData, int nheight, int nwidth)
+static unsigned char GetGray(unsigned char *pImageData, int inheight, int jnwidth, int nheight, int nwidth)
 {
-    if(NULL == pImageData || nheight < 0 || nwidth < 0)
+    if(NULL == pImageData || nheight < 0 || nwidth < 0 || inheight < 0 || jnwidth < 0)
     {
         toupcam_log_f(LOG_ERROR, "input ptr is null");
         return 0;
     }
 
     unsigned char gray = 0;
-    unsigned char *pucImageData = pImageData+nwidth*3*nheight+nwidth*3;
+    unsigned char *pucImageData = pImageData+nwidth*3*nheight+jnwidth;
     /* 方法1: Gray = (R*30 + G*59 + B*11 + 50) / 100 */
     /* 方法2: Gray = (R*38 + G*75 + B*15) >> 7 */
     gray = (*pucImageData*38 + *(pucImageData+1)*75 + *(pucImageData+2)*15)>>7;
@@ -495,9 +495,9 @@ static unsigned char linetran(unsigned char *pImageData, int nheight, int nwidth
 
     for (int i = 0; i < nheight; ++i)
     {
-        for (int j = 0; j < nwidth; ++j)
+        for (int j = 0; j < nwidth*3; j+=3)
         {
-            gray = GetGray(pImageData, i, j);
+            gray = GetGray(pImageData, i, j, nheight, nwidth);
             target = fa*gray + fb;
             if(target < 0)
             {
@@ -507,12 +507,99 @@ static unsigned char linetran(unsigned char *pImageData, int nheight, int nwidth
             {
                 target = 255;
             }
-            pucImageData = pImageData + i*j*3 + j*3;
+            pucImageData = pImageData + i*nwidth*3 + j;
             *pucImageData++ = target;
             *pucImageData++ = target;
             *pucImageData = target;
         }
     }    
+    return 0;
+}
+
+/*
+* 图像二值化处理
+*/
+int Binarization(unsigned char *pImageData, int height, int width, int bit)
+{
+    int iRet = ERROR_SUCCESS;
+    int i, j;
+    if(NULL == pImageData || height < 0 || width < 0)
+    {
+        toupcam_log_f(LOG_ERROR, "input ptr is null");
+        return -1;
+    }
+
+    if(bit != 24)
+    {
+        toupcam_log_f(LOG_ERROR, "bit is not 24");
+        return -1;
+    }
+
+#ifdef STUDY_RGB_GRAY
+    /* study RGB R=G=B=gray */
+    for (i = 0; i < height; ++i)
+    {
+        for (j = 0; j < width; ++j)
+        {
+            if(*((unsigned char*)pImageData+i*width*3+j) == *((unsigned char*)pImageData+i*width*3+j+1) 
+                && *((unsigned char*)pImageData+i*width*3+j) == *((unsigned char*)pImageData+i*width*3+j+2))
+            {
+                toupcam_log_f(LOG_ERROR, "R G B is equal");
+            }
+            else
+            {
+                toupcam_log_f(LOG_ERROR, "R G B is not equal");
+            }
+        }
+    }
+#endif
+
+#ifdef STUDY_RGB_THRESHOLD_BINARIZATION
+    /* 阈值二值化 */
+    for (i = 0; i < height; ++i)
+    {
+        for (j = 0; j < width*3; ++j)
+        {
+            if(127 > *((unsigned char *)pImageData+i*width*3+j))
+            {
+                *((unsigned char *)pImageData+i*width*3+j) = 0;
+            }
+            else
+            {
+                *((unsigned char *)pImageData+i*width*3+j) = 255;
+            }
+        }
+    }
+#endif
+
+#ifdef STUDY_RGB_AVERAGE_BINARIZATION
+    /* 平均值二值化 */
+    unsigned long long ullaverage = 0;
+    for (i = 0; i < height; ++i)
+    {
+        for (j = 0; j < width*3; j+=3)
+        {
+            ullaverage += *((unsigned char *)pImageData+i*width*3+j);
+        }
+    }
+    ullaverage = (unsigned char)(ullaverage/(height*width));
+    for (i = 0; i < height; ++i)
+    {
+        for (j = 0; j < width*3; ++j)
+        {
+            if(ullaverage > *((unsigned char *)pImageData+i*width*3+j))
+            {
+                *((unsigned char *)pImageData+i*width*3+j) = 0;
+            }
+            else
+            {
+                *((unsigned char *)pImageData+i*width*3+j) = 255;
+            }
+        }
+    }    
+#endif
+    
+
     return 0;
 }
 
@@ -531,6 +618,64 @@ int image_arithmetic_handle_rgb(unsigned char *pImageData, int height, int width
         toupcam_log_f(LOG_ERROR, "bit is not 24");
         return -1;
     }
+
+#ifdef STUDY_HISTOGRAM_
+    unsigned char n[255] = {0};
+    unsigned char c[255] = {0};
+    unsigned char p[255] = {0};
+    unsigned char min,max;
+
+    i = height;
+    j = width * 3;
+    min = max = pImageData[0];
+    /* 累计灰度值 */
+    for(i = 0; i < height; i++)
+    {
+        for(j = 0; j < width*3; j++)
+        {
+            if(min > pImageData[i+j])
+            {
+                min = pImageData[i+j];
+            }
+            if(max < pImageData[i+j])
+            {
+                max = pImageData[i+j];
+            }
+            n[pImageData[i+j]]++;
+        }
+    }
+    for(i = 0; i < 255; i++)
+    {
+        p[i] = n[i] / (width*height*3);
+    }
+    
+    /* 累计值归一化 */
+    for(i = 0; i < 255; i++)
+    {
+        for(j = 0; j <= i; j++)
+        {
+            c[i] += p[j];
+        }
+    }
+
+    /* 均衡化处理 */
+    for(i = 0; i < height; i++)
+    {
+        for(j = 0; j < width*3; j++)
+        {
+            pImageData[i+j] = c[pImageData[i+j]] * (max - min) + min;
+        }
+    }
+#endif
+
+    iRet = Binarization(pImageData, height, width, bit);
+    if(ERROR_SUCCESS != iRet)
+    {
+        toupcam_log_f(LOG_ERROR, "image Binarization failed");
+        return ERROR_FAILED;
+    }
+
+    return ERROR_SUCCESS;
     
     unsigned char gray = 0;
     unsigned char *pucImageData = NULL;
@@ -1052,7 +1197,7 @@ MPP_RET mpp_encode(MPP_ENC_DATA_S *p, unsigned char *yuv, unsigned long len)
         void *ptr   = mpp_packet_get_pos(packet);
         size_t len  = mpp_packet_get_length(packet);
 
-        if(0 == p->frame_count%30)
+        if(0 == p->frame_count%10)
         {
             //fwrite(pch264spspps, 1, 45, p->fp_output);
             rtp_transmit(ptr, pch264spspps, len, len0);
@@ -1144,10 +1289,8 @@ void encode2hardware(unsigned char *g_pImageData)
         printf("mpp_encode failed ret %d\n", ret);
     }
 
-
     free(pucyuvBuf);
     pucyuvBuf = NULL;
-
 
     return;
 }

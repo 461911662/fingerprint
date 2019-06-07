@@ -79,6 +79,31 @@ COM_TOUPCAM_ENTRY_S g_ComToupcam_Entry[] = {
 };
 
 /*
+* 白平衡回调 TEMP/TINT
+*/
+void __stdcall _PITOUPCAM_TEMPTINT_CALLBACK(const int nTemp, const int nTint, void* pCtx)
+{
+    return ;
+}
+
+/*
+* 白平衡回调 aGain: R G B
+*/
+void __stdcall _PITOUPCAM_WHITEBALANCE_CALLBACK(const int aGain[3], void* pCtx)
+{
+    return;
+}
+
+
+/*
+* 黑平衡回调
+*/
+void __stdcall _PITOUPCAM_BLACKBALANCE_CALLBACK(const unsigned short aSub[3], void* pCtx)
+{
+    return ;
+}
+
+/*
 * Toupcam 提前初始化函数
 */
 unsigned int PreInitialDevice(void *pvoid)
@@ -497,13 +522,22 @@ unsigned int StartDevice(void *pvoid)
             SufInitialDevice(g_pstTouPcam);
         }
         toupcam_log_f(LOG_WARNNING, "press any B/b to exit\n");
+
+        for(int i = 0; i < g_PthreadMaxNum; i++)
+        {
+            void** pret = NULL;
+            pthread_join(g_PthreadId[i], pret);    
+        }
+/* cpu is high
         while(1)
         {
             if('b' == getc(stdin) || 'B' == getc(stdin))
             {
                 break;
             }
+            sleep(10);          
         }
+*/
         return ERROR_FAILED;
     }
     
@@ -572,7 +606,7 @@ unsigned int ConfigDevice(void *pvoid)
     }
 
     /* 帧率设置 */
-    g_pstTouPcam->iFrameRate = 10;
+    g_pstTouPcam->iFrameRate = 30;
     iRet = Toupcam_put_Option(g_pstTouPcam->m_hcam, TOUPCAM_OPTION_FRAMERATE, g_pstTouPcam->iFrameRate);
     if(FAILED(iRet))
     {
@@ -869,30 +903,46 @@ static unsigned int Set_BlackBalanceToupcam()
     unsigned short BBlcOff[3] = {0};
     PITOUPCAM_BLACKBALANCE_CALLBACK fnBBProc = NULL;
 
+    /* 更新黑平衡 */
+    fnBBProc = _PITOUPCAM_BLACKBALANCE_CALLBACK;
+
     pthread_mutex_init(&g_pstTouPcam->stBlackBlc.mutex, NULL);
     pthread_mutex_lock(&g_pstTouPcam->stBlackBlc.mutex);
-    hr = Toupcam_get_BlackBalance(g_pstTouPcam->m_hcam, g_pstTouPcam->stBlackBlc.OffVal.aSub);
-    if(FAILED(hr))
-    {
-        toupcam_log_f(LOG_ERROR, "get default value failed(%d)\n", hr);
-    }
-
+#if 0
     /* special RGB offset */
     /*
     * 自动黑平衡设置
     */
     /* auto black balance "one push". This function must be called AFTER Toupcam_StartXXXX */
-    //toupcam_ports(HRESULT)  Toupcam_AbbOnePush(g_pstTouPcam->m_hcam, fnBBProc, NULL); 
+    hr = Toupcam_AbbOnePush(g_pstTouPcam->m_hcam, fnBBProc, NULL); 
+    if(FAILED(hr))
+    {
+        toupcam_log_f(LOG_ERROR, "set black balance failed(%d)\n", hr);
+        g_pstTouPcam->stBlackBlc.iauto = 0;
+    }
+    else
+    {
+        g_pstTouPcam->stBlackBlc.iauto = 1;
+    }
+#endif
+
+    hr = Toupcam_get_BlackBalance(g_pstTouPcam->m_hcam, g_pstTouPcam->stBlackBlc.OffVal.aSub);
+    if(FAILED(hr))
+    {
+        toupcam_log_f(LOG_ERROR, "get cur value failed(%d)\n", hr);
+    }
+  
     /*
     g_pstTouPcam->stBlackBlc.OffVal.aSub[0] = 80;
     g_pstTouPcam->stBlackBlc.OffVal.aSub[1] = 80;
     g_pstTouPcam->stBlackBlc.OffVal.aSub[2] = 80;
-    */
+    
     hr = Toupcam_put_BlackBalance(g_pstTouPcam->m_hcam, g_pstTouPcam->stBlackBlc.OffVal.aSub);
     if(FAILED(hr))
     {
         toupcam_log_f(LOG_ERROR, "put default value failed(%d)\n", hr);
     }
+    */
 
     toupcam_log_f(LOG_INFO, "blackbalance R:%d", g_pstTouPcam->stBlackBlc.OffVal.aSub[0]);
     toupcam_log_f(LOG_INFO, "blackbalance G:%d", g_pstTouPcam->stBlackBlc.OffVal.aSub[1]);
@@ -914,26 +964,49 @@ static unsigned int Set_ReBlackBalanceToupcam()
         return ERROR_FAILED;
     }
     HRESULT hr = 0;
+    PITOUPCAM_BLACKBALANCE_CALLBACK fnBBProc = NULL;
+
+    /* 更新黑平衡 */
+    fnBBProc = _PITOUPCAM_BLACKBALANCE_CALLBACK;
 
     pthread_mutex_init(&g_pstTouPcam->stBlackBlc.mutex, NULL);
     pthread_mutex_lock(&g_pstTouPcam->stBlackBlc.mutex);
 
-#if 0
-    /* fresh data */
-    g_pstTouPcam->stBlackBlc.OffVal.aSub[0] = g_pstTouPcam->stBlackBlc.OffVal.ROff;
-    g_pstTouPcam->stBlackBlc.OffVal.aSub[1] = g_pstTouPcam->stBlackBlc.OffVal.GOff;
-    g_pstTouPcam->stBlackBlc.OffVal.aSub[2] = g_pstTouPcam->stBlackBlc.OffVal.BOff;
+    if(g_pstTouPcam->stBlackBlc.iauto)
+    {
+        hr = Toupcam_AbbOnePush(g_pstTouPcam->m_hcam, fnBBProc, NULL); 
+        if(FAILED(hr))
+        {
+            toupcam_log_f(LOG_ERROR, "set black balance failed(%d)\n", hr);
+        }
+    }
+    else
+    {
+#if 0   /* cancle special class */
+        /* fresh data */
+        g_pstTouPcam->stBlackBlc.OffVal.aSub[0] = g_pstTouPcam->stBlackBlc.OffVal.ROff;
+        g_pstTouPcam->stBlackBlc.OffVal.aSub[1] = g_pstTouPcam->stBlackBlc.OffVal.GOff;
+        g_pstTouPcam->stBlackBlc.OffVal.aSub[2] = g_pstTouPcam->stBlackBlc.OffVal.BOff;
 
-    /* special RGB offset */
-    hr = Toupcam_put_BlackBalance(g_pstTouPcam->m_hcam, g_pstTouPcam->stBlackBlc.OffVal.aSub);
+        /* special RGB offset */
+        hr = Toupcam_put_BlackBalance(g_pstTouPcam->m_hcam, g_pstTouPcam->stBlackBlc.OffVal.aSub);
+        if(FAILED(hr))
+        {
+            toupcam_log_f(LOG_ERROR, "put default value failed(%d)\n", hr);
+        }
+#endif
+    }
+
+    hr = Toupcam_get_BlackBalance(g_pstTouPcam->m_hcam, g_pstTouPcam->stBlackBlc.OffVal.aSub);
     if(FAILED(hr))
     {
-        toupcam_log_f(LOG_ERROR, "put default value failed(%d)\n", hr);
+        toupcam_log_f(LOG_ERROR, "get default value failed(%d)\n", hr);
     }
+    
     toupcam_dbg_f(LOG_INFO, "reloader cfg stBlackBlc.OffVal.ROff:%d", g_pstTouPcam->stBlackBlc.OffVal.ROff);
     toupcam_dbg_f(LOG_INFO, "reloader cfg stBlackBlc.OffVal.GOff:%d", g_pstTouPcam->stBlackBlc.OffVal.GOff);
     toupcam_dbg_f(LOG_INFO, "reloader cfg stBlackBlc.OffVal.BOff:%d", g_pstTouPcam->stBlackBlc.OffVal.BOff);
-#endif
+
     pthread_mutex_unlock(&g_pstTouPcam->stBlackBlc.mutex);
 
     return ERROR_SUCCESS;    
@@ -951,33 +1024,68 @@ static unsigned int Set_WhiteBalanceToupcam()
     }
     HRESULT hr = 0;
     int iTTCtx = 0;
-    PITOUPCAM_TEMPTINT_CALLBACK fnTTProc = NULL;
+    int aGain[3] = {0};
+    PITOUPCAM_WHITEBALANCE_CALLBACK fnTTProc = NULL;
 
+    /* 更新白平衡回调函数 */
+    fnTTProc = _PITOUPCAM_WHITEBALANCE_CALLBACK;
+    
     /* 初始化锁 */
     pthread_mutex_init(&g_pstTouPcam->stWhiteBlc.mutex, NULL);
-#if 0
+    pthread_mutex_lock(&g_pstTouPcam->stWhiteBlc.mutex);
+
+#if 0 /* not support */
     /* set auto white balance mode as Temp/Tint */
     /* auto white balance "one push". This function must be called AFTER Toupcam_StartXXXX */
     hr = Toupcam_AwbOnePush(g_pstTouPcam->m_hcam, fnTTProc, (void *)&iTTCtx);
     if(FAILED(hr))
     {
         toupcam_log_f(LOG_ERROR, "set white balance fnTTProc failed!\n");
+        g_pstTouPcam->stWhiteBlc.iauto = 0;
         //return ERROR_FAILED;
     }
-    
-    pthread_mutex_lock(&g_pstTouPcam->stWhiteBlc.mutex);
-    g_pstTouPcam->stWhiteBlc.iauto = 1;
+    else
+    {
+        g_pstTouPcam->stWhiteBlc.iauto = 1;
+    }
 
     hr = Toupcam_get_TempTint(g_pstTouPcam->m_hcam, &g_pstTouPcam->stWhiteBlc.Temp, &g_pstTouPcam->stWhiteBlc.Tint);
     if(FAILED(hr))
     {
         toupcam_log_f(LOG_ERROR, "init Temp,Tint failed!\n");
-        pthread_mutex_unlock(&g_pstTouPcam->stWhiteBlc.mutex);
+        //pthread_mutex_unlock(&g_pstTouPcam->stWhiteBlc.mutex);
         //return ERROR_FAILED;
     }
     toupcam_dbg_f(LOG_DEBUG, "White balance Temp:%d, Tint:%d\n", g_pstTouPcam->stWhiteBlc.Temp, g_pstTouPcam->stWhiteBlc.Tint);
-    pthread_mutex_unlock(&g_pstTouPcam->stWhiteBlc.mutex);
 #endif
+    hr = Toupcam_AwbInit(g_pstTouPcam->m_hcam, fnTTProc, NULL);
+    if(FAILED(hr))
+    {
+        toupcam_log_f(LOG_ERROR, "set white balance fnTTProc failed(%d)!\n", hr);
+        g_pstTouPcam->stWhiteBlc.iauto = 0;
+        //return ERROR_FAILED;
+    }
+    else
+    {
+        g_pstTouPcam->stWhiteBlc.iauto = 1;
+    }
+    
+    hr = Toupcam_get_WhiteBalanceGain(g_pstTouPcam->m_hcam, aGain);
+    if(FAILED(hr))
+    {
+        toupcam_log_f(LOG_ERROR, "get white balance aGain failed(%d)!\n", hr);
+        //return ERROR_FAILED;
+    }
+    else
+    {
+        g_pstTouPcam->stWhiteBlc.RGain = aGain[0];
+        g_pstTouPcam->stWhiteBlc.GGain = aGain[1];
+        g_pstTouPcam->stWhiteBlc.BGain = aGain[2];
+    }
+
+    toupcam_log_f(LOG_INFO, "cur white balance RGain[%d],GGain[%d],BGain[%d]\n", aGain[0], aGain[1], aGain[2]);
+    pthread_mutex_unlock(&g_pstTouPcam->stWhiteBlc.mutex);
+
     return ERROR_SUCCESS;
 }
 
@@ -993,28 +1101,80 @@ static unsigned int Set_ReWhiteBalanceToupcam()
     }
     HRESULT hr = 0;
     int iTTCtx = 0;
-    PITOUPCAM_TEMPTINT_CALLBACK fnTTProc = NULL;
+    int aGain[3] = {0};
+    PITOUPCAM_WHITEBALANCE_CALLBACK fnTTProc = NULL;
+
+    /* 更新白平衡 */
+    fnTTProc = _PITOUPCAM_WHITEBALANCE_CALLBACK;
 
     /* 初始化锁 */
     pthread_mutex_init(&g_pstTouPcam->stWhiteBlc.mutex, NULL);
 
     /* set auto white balance mode as Temp/Tint */
     /* auto white balance "one push". This function must be called AFTER Toupcam_StartXXXX */
-#if 0
+
     /*
-    * 该功能未做
+    * 白平衡功能,不支持自动白平衡模式，支持Temp
     */
-    hr = Toupcam_AwbOnePush(g_pstTouPcam->m_hcam, fnTTProc, (void *)&iTTCtx);
+    if(g_pstTouPcam->stWhiteBlc.iauto)
+    {
+#if 0        
+        hr = Toupcam_AwbOnePush(g_pstTouPcam->m_hcam, fnTTProc, (void *)&iTTCtx);
+        if(FAILED(hr))
+        {
+            toupcam_log_f(LOG_ERROR, "set white balance fnTTProc failed(%d)!\n", hr);
+            //return ERROR_FAILED;
+        }
+#endif
+        hr = Toupcam_AwbInit(g_pstTouPcam->m_hcam, fnTTProc, NULL);
+        if(FAILED(hr))
+        {
+            toupcam_log_f(LOG_ERROR, "reloader cfg set white balance fnTTProc failed(%d)!\n", hr);
+            //return ERROR_FAILED;
+        }
+    }
+    else
+    {
+#if 0
+        hr = Toupcam_get_TempTint(g_pstTouPcam->m_hcam, &g_pstTouPcam->stWhiteBlc.Temp, &g_pstTouPcam->stWhiteBlc.Tint);
+        if(FAILED(hr))
+        {
+            toupcam_log_f(LOG_ERROR, "init Temp,Tint failed!\n");
+            //pthread_mutex_unlock(&g_pstTouPcam->stWhiteBlc.mutex);
+            //return ERROR_FAILED;
+        }
+#endif
+        aGain[0] = g_pstTouPcam->stWhiteBlc.RGain;
+        aGain[1] = g_pstTouPcam->stWhiteBlc.GGain;
+        aGain[2] = g_pstTouPcam->stWhiteBlc.BGain;
+
+        hr = Toupcam_put_WhiteBalanceGain(g_pstTouPcam->m_hcam, aGain);
+        if(FAILED(hr))
+        {
+            toupcam_log_f(LOG_ERROR, "reloader cfg put white balance aGain failed(%d)!\n", hr);
+            //return ERROR_FAILED;
+        }
+    }
+
+    hr = Toupcam_get_WhiteBalanceGain(g_pstTouPcam->m_hcam, aGain);
     if(FAILED(hr))
     {
-        toupcam_log_f(LOG_ERROR, "set white balance fnTTProc failed!\n");
+        toupcam_log_f(LOG_ERROR, "reloader cfg get white balance aGain failed(%d)!\n", hr);
         //return ERROR_FAILED;
     }
-#endif
-    
-    pthread_mutex_lock(&g_pstTouPcam->stWhiteBlc.mutex);
-    toupcam_dbg_f(LOG_INFO, "reloader cfg stWhiteBlc.Temp:%d,stWhiteBlc.Tint:%d\n", g_pstTouPcam->stWhiteBlc.Temp, g_pstTouPcam->stWhiteBlc.Tint);
-    pthread_mutex_unlock(&g_pstTouPcam->stWhiteBlc.mutex);
+    else
+    {
+        pthread_mutex_lock(&g_pstTouPcam->stWhiteBlc.mutex);
+        g_pstTouPcam->stWhiteBlc.RGain = aGain[0];
+        g_pstTouPcam->stWhiteBlc.GGain = aGain[1];
+        g_pstTouPcam->stWhiteBlc.BGain = aGain[2];
+        pthread_mutex_unlock(&g_pstTouPcam->stWhiteBlc.mutex);
+    }
+  
+    toupcam_dbg_f(LOG_INFO, "reloader cfg stWhiteBlc.Temp:%d,stWhiteBlc.Tint:%d\n", g_pstTouPcam->stWhiteBlc.Temp, 
+                            g_pstTouPcam->stWhiteBlc.Tint);
+    toupcam_log_f(LOG_INFO, "reloader cfg cur white balance RGain[%d],GGain[%d],BGain[%d]\n", g_pstTouPcam->stWhiteBlc.RGain, 
+                            g_pstTouPcam->stWhiteBlc.GGain, g_pstTouPcam->stWhiteBlc.BGain);
 
     return ERROR_SUCCESS;
 }
@@ -1141,7 +1301,7 @@ static unsigned int Set_HistogramToupcam()
 
     pthread_mutex_lock(&g_pstTouPcam->stHistoram.mutex);
     g_pstTouPcam->stHistoram.bAutoHis = 0;
-#if 0
+#if 1
     /* 设置直方图为自动         */
     g_pstTouPcam->stHistoram.bAutoHis = TRUE;
     hr = Toupcam_LevelRangeAuto(g_pstTouPcam->m_hcam);
@@ -1151,6 +1311,7 @@ static unsigned int Set_HistogramToupcam()
         return ERROR_FAILED;
     }
 #endif
+#if 0
     g_pstTouPcam->stHistoram.aLow[0] = 0;
     g_pstTouPcam->stHistoram.aLow[1] = 0;
     g_pstTouPcam->stHistoram.aLow[2] = 0;
@@ -1167,6 +1328,7 @@ static unsigned int Set_HistogramToupcam()
         toupcam_log_f(LOG_ERROR, "updated histogram data failed.\n");
         return ERROR_FAILED;
     }
+#endif
     /* 更新直方图范围 */
     hr = Toupcam_get_LevelRange(g_pstTouPcam->m_hcam, g_pstTouPcam->stHistoram.aLow, g_pstTouPcam->stHistoram.aHigh);
     if(FAILED(hr))
@@ -1201,7 +1363,8 @@ static unsigned int Set_ReHistogramToupcam()
 
     pthread_mutex_lock(&g_pstTouPcam->stHistoram.mutex);    
     /* 设置直方图为自动         */
-    if(g_pstTouPcam->stHistoram.bAutoHis == -1) /* 直方图自动不支持 */
+    //if(g_pstTouPcam->stHistoram.bAutoHis == -1) /* 直方图自动不支持 */
+    if(g_pstTouPcam->stHistoram.bAutoHis)
     {
         hr = Toupcam_LevelRangeAuto(g_pstTouPcam->m_hcam);
         if(FAILED(hr))

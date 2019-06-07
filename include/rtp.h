@@ -38,7 +38,7 @@
 #define RTP_TIMETAMP_OFFSET (4)
 #define RTP_SSRC_OFFSET     (8)
  
-#define MAX_PACK_LEN (1448)
+#define MAX_PACK_LEN (1029) /* 1448 - histogram data(274) - tcp cmd data(145) */
 #define RTP_HEAD_LEN (12)
  
 #define H264_TYPE           (0x60)

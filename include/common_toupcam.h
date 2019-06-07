@@ -8,10 +8,11 @@
 #define REQUES_SIZE  (128)
 #define ARRAY_SIZE(a) sizeof(a)/sizeof(a[0])
 
-#define SOFT_ENCODE_H264
+#undef SOFT_ENCODE_H264
 #define MPP_FRAME_MAXNUM 1000000000000
 #define ROI_IMAGE
 #undef TOUPCAM_RELEASE
+#undef PICTURE_ARITHMETIC
 
 #define TOUPCAM_POWER_AC_60HZ       0
 #define TOUPCAM_POWER_AC_50HZ       1
@@ -314,6 +315,8 @@ extern int g_pStaticImageDataFlag;
 extern unsigned int iEndianness;
 extern pthread_mutex_t g_PthreadMutexMonitor;
 
+extern pthread_t g_PthreadId[];
+extern unsigned int g_PthreadMaxNum;
 
 extern struct sockets *sock; /* udp potr:5004 */
 extern struct sockets *sock1; /* tcp potr:5005 */

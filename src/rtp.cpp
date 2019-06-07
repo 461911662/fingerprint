@@ -14,13 +14,14 @@ void *creat_rtp_pack(struct rtp_data *data)
 {
     unsigned char *buf;
     /* 数据长度检测，数据长度大于最大包长，则分包。*/
-    if(data->datalen>MAX_PACK_LEN&&data->datalen>(data->bufrelen+data->rtpdatakcount))
+    //if(data->datalen>MAX_PACK_LEN && data->datalen>(data->bufrelen+data->rtpdatakcount))
+    if(data->datalen-data->offset>MAX_PACK_LEN)
     {
-        /* 分包 */
-         
-        unsigned int templen=(data->datalen-data->bufrelen-1);
+        /* 分包 */        
+        //unsigned int templen=(data->datalen-data->bufrelen-1);
+        unsigned int templen=(data->datalen-data->offset-1);
         data->rtpdatakcount+=1;
-        if(templen>MAX_PACK_LEN-1)
+        if(templen>MAX_PACK_LEN-1)  /* 包含MAX_PACK_LEN */
         {
             buf=(unsigned char *)malloc(MAX_PACK_LEN);
             memset(buf,0,MAX_PACK_LEN);
@@ -33,6 +34,7 @@ void *creat_rtp_pack(struct rtp_data *data)
                 *(buf+RTP_HEAD_LEN+1)=(data->rtp_fuh|(0x80));
                 data->bufrelen+=MAX_PACK_LEN;
                 data->offset+=MAX_PACK_LEN-RTP_HEAD_LEN-1;
+                //printf("first\n");
             }
             else
             {
@@ -41,6 +43,7 @@ void *creat_rtp_pack(struct rtp_data *data)
                 *(buf+RTP_HEAD_LEN+1)=(data->rtp_fuh|(0x00));
                 data->bufrelen+=MAX_PACK_LEN;
                 data->offset+=MAX_PACK_LEN-RTP_HEAD_LEN-2;
+                //printf("middle\n");
             }
  
             *(buf+RTP_HEAD_LEN)=(data->rtp_fui|(0x1c));
@@ -56,17 +59,38 @@ void *creat_rtp_pack(struct rtp_data *data)
             *(buf+RTP_HEAD_LEN)=(0x1c|data->rtp_fui);
             *(buf+RTP_HEAD_LEN+1)=(data->rtp_fuh|(0x40));
             data->bufrelen+=templen+RTP_HEAD_LEN+2;
-            data->offset+=templen-1;
+            //data->offset+=templen-1;
+            data->offset+=templen;
+            //printf("last ");
         }
-    }
-    else if(data->datalen>data->bufrelen)
+    } 
+    //else if(data->datalen>data->bufrelen)
+    else if(data->datalen>data->offset)
     {
         /* 数据长度小于包长，则不分包 */
-        buf=(unsigned char *)malloc(data->datalen+RTP_HEAD_LEN);
-        memset(buf,0,data->datalen+RTP_HEAD_LEN);
+        unsigned int templen=(data->datalen-data->offset);
+#if 0
+        buf=(unsigned char *)malloc(templen+RTP_HEAD_LEN);
+        //buf=(unsigned char *)malloc(data->datalen+RTP_HEAD_LEN);
+        //memset(buf,0,data->datalen+RTP_HEAD_LEN);
+        memset(buf,0,templen+RTP_HEAD_LEN);
  
-        memcpy((buf+RTP_HEAD_LEN),data->buff,data->datalen);
-        data->bufrelen+=data->datalen+RTP_HEAD_LEN;
+        //memcpy((buf+RTP_HEAD_LEN),data->buff,data->datalen);
+        //data->bufrelen+=data->datalen+RTP_HEAD_LEN;
+        memcpy((buf+RTP_HEAD_LEN),(unsigned char*)data->buff+data->offset,templen);
+        //data->bufrelen+=data->datalen+RTP_HEAD_LEN;
+        data->bufrelen+=templen+RTP_HEAD_LEN;
+        data->offset += templen;
+#endif
+
+        buf=(unsigned char *)malloc(templen+RTP_HEAD_LEN+2);
+        memset(buf,0,templen+RTP_HEAD_LEN+2);
+        memcpy((buf+RTP_HEAD_LEN+2),((unsigned char*)data->buff+data->offset),templen);
+        *(buf+RTP_HEAD_LEN)=(0x1c|data->rtp_fui);
+        *(buf+RTP_HEAD_LEN+1)=(data->rtp_fuh|(0x40));
+        data->bufrelen+=templen+RTP_HEAD_LEN+2;
+        data->offset+=templen;
+        //printf("ex first %d\n", templen);
     }
     else
     {
@@ -268,6 +292,7 @@ void *getdata(FILE *file)
 char rtp_send(struct rtp_pack *rtp,struct sockets *sock)
 {
     int num=0;
+    
     /* 通过网络将数据发送出去 */
     if((num=sendto(sock->local,rtp->databuff,rtp->packlen,0,(struct sockaddr *)sock->cliaddr[0],sizeof(struct sockaddr_in)))==-1)
     {
@@ -282,7 +307,8 @@ char rtp_send(struct rtp_pack *rtp,struct sockets *sock)
     }
     printf("\r\n");
     */
-    /* debug("number is : %d packlen is : %d\n", num, rtp->packlen); */
+    //debug("number is : %d packlen is : %d\n", num, rtp->packlen);
+    //debug("send: sock->local:%d ip:%s packet len:%d.\n", sock->local, inet_ntoa(sock->cliaddr[0]->sin_addr), rtp->packlen);
     /* 释放缓冲区 */
     free(rtp->databuff);
     rtp->databuff=NULL;
