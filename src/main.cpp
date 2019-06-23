@@ -27,6 +27,7 @@
 #include "../include/mpp_encode_data.h"
 #include "../include/toupcam_data.h"
 #include "../include/toupcam_parse.h"
+#include "../include/fixframerate.h"
 
 //using namespace cv;
 using namespace std;
@@ -66,6 +67,9 @@ int WIDTH = 0, HEIGHT = 0;
 /* support for jpeg transmit */
 unsigned char *g_pucJpgDest = NULL;//[1024*1022];
 unsigned int giJpgSize=1024*1022;
+
+/* 控制帧率 */
+FixFrameRate *pstFixFrameRate = NULL;
 
 /* 大小端标志 */
 unsigned int iEndianness = 0;
@@ -280,7 +284,7 @@ void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx)
     {
         case TOUPCAM_EVENT_IMAGE:
             memset(g_pImageData, 0, sizeof(g_pstTouPcam->m_header.biSizeImage));
-            hr = Toupcam_PullImageV2(g_hcam, g_pImageData, 24, &info);
+            hr = Toupcam_PullImageV2(g_hcam, g_pImageData, BIT_DEPTH, &info);
 
             /* 算法处理 */
 #ifdef PICTURE_ARITHMETIC
@@ -292,6 +296,7 @@ void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx)
             {                
                 /* After we get the image data, we can do anything for the data we want to do */
                 /* toupcam_log_f(LOG_INFO, "pull image ok, total = %u, resolution = %u x %u\n", ++g_total, info.width, info.height); */
+                /*
                 FILE *fp = fopen("mRGB.dat", "ab");
                 if(NULL == fp)
                 {
@@ -302,18 +307,8 @@ void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx)
                     fwrite(g_pImageData, g_pstTouPcam->inHeight*g_pstTouPcam->inWidth*3, 1, fp);
                     fclose(fp);
                 }
-                
-#ifdef SOFT_ENCODE_H264
-                encode_yuv((unsigned char *)g_pImageData);
-#else
-                if(g_pstmpp_enc_data && g_pstmpp_enc_data->frame_count >= MPP_FRAME_MAXNUM)
-                {
-                    mpp_ctx_deinit(&g_pstmpp_enc_data);
-                    init_mpp();
-                }
-                encode2hardware((unsigned char *)g_pImageData);
-#endif
-                frame_num++;
+                */
+                pstFixFrameRate->PushQueue((char *)g_pImageData);
             }
             break;
         case TOUPCAM_EVENT_STILLIMAGE:
@@ -413,9 +408,22 @@ void *pthread_link_task1(void *argv)
 {
     if(NULL == argv)
     {
-        return NULL;
+        toupcam_log_f(LOG_ERROR, "input error");
+        *(int *)argv = -1;
+        pthread_exit(argv);
     }
+    int iRet;
+    int iNum = 0;
+    int iLen = 0;
+    int fd = *(int *)argv;
+    int pCtx = 0;
+    char *pcdes = NULL;
+    char *pcfinger = NULL;
+    HRESULT hr;
+    int pHistoramCtx = 0;
+    TOUPCAM_COMMON_RESPON_S stToupcamRespon;
 
+    char cname[16] = {0};
     cpu_set_t mask;
 
     int processid = distribute_process();
@@ -429,14 +437,23 @@ void *pthread_link_task1(void *argv)
         }
         toupcam_log_f(LOG_INFO, "thread id(%d) use process(%d)", (int)pthread_self(), processid);
     }
+    
+    if(-1 != processid)
+    {
+        sprintf(cname, "link_task1_p%d", processid);
+    }
+    else
+    {
+        sprintf(cname, "link_task1_p__");
+    }
+    
+    iRet = prctl(PR_SET_NAME, cname);
+    if(0 != iRet)
+    {
+        toupcam_log_f(LOG_WARNNING, "%s", strerror(errno));
+        goto exit0;
+    }
 
-    int iNum = 0;
-    int iLen = 0;
-    int fd = *(int *)argv;
-    int pCtx = 0;
-    HRESULT hr;
-    int pHistoramCtx = 0;
-    TOUPCAM_COMMON_RESPON_S stToupcamRespon;
     stToupcamRespon.com.cmd = COMCMD_TOUPCAMCFG;
     sprintf(stToupcamRespon.com.proto, "%s", "proto");
     stToupcamRespon.com.proto[4] = 'o';
@@ -450,12 +467,11 @@ void *pthread_link_task1(void *argv)
     stToupcamRespon.com.cmd = COMCMD_TOUPCAMCFG;
     stToupcamRespon.com.subcmd = CMD_DATATSM;
 
-    char *pcdes = (char *)malloc(sizeof(g_pstTouPcam->stHistoram.aHistY)*4+TOUPCAM_COMMON_RESPON_HEADER_SIZE);
-    char *pcfinger = NULL;
+    pcdes = (char *)malloc(sizeof(g_pstTouPcam->stHistoram.aHistY)*4+TOUPCAM_COMMON_RESPON_HEADER_SIZE);
     if(NULL == pcdes)
     {
         toupcam_log_f(LOG_ERROR, "%s.", strerror(errno));
-        return NULL;
+        goto exit0;
     }
 
     while(1)
@@ -464,6 +480,24 @@ void *pthread_link_task1(void *argv)
         {
             continue;
         }
+
+        /* 更新自动直方图 */
+        pthread_mutex_trylock(&g_PthreadMutexMonitor);
+        if(g_pstTouPcam->stHistoram.bAutoHis)
+        {
+            hr = Toupcam_LevelRangeAuto(g_pstTouPcam->m_hcam);
+            if(FAILED(hr))
+            {
+                /* goto _exit0; */
+            }
+            hr = Toupcam_get_LevelRange(g_pstTouPcam->m_hcam, g_pstTouPcam->stHistoram.aLow, g_pstTouPcam->stHistoram.aHigh);
+            if(FAILED(hr))
+            {
+                /* goto _exit0; */
+            }
+        }
+        pthread_mutex_unlock(&g_PthreadMutexMonitor);
+    
         pcfinger = pcdes;
         void *pstr = &pCtx;
         memset(pcfinger, 0, sizeof(g_pstTouPcam->stHistoram.aHistY)*4);
@@ -510,6 +544,10 @@ void *pthread_link_task1(void *argv)
     free(pcdes);
     pcdes = NULL;
 
+exit0:
+    g_puiProcess_task[processid] = 0;
+    *(int *)argv = -1;
+    pthread_exit(argv);
     return NULL;
 
 }
@@ -519,6 +557,18 @@ void link_task()
     int ifd = 0;
 
     pthread_t  *pid = NULL;
+    pthread_attr_t attr;
+
+    int s = pthread_attr_init(&attr);
+    if (0 != s)
+    {
+        toupcam_log_f(LOG_INFO, "pthread_attr_init(%d)", s);
+    }
+    s = pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+    if (0 != s)
+    {
+        toupcam_log_f(LOG_INFO, "pthread_attr_setdetachstate(%d)", s);
+    }
 
     /* create link task */
     pid = distribute_thread();
@@ -526,8 +576,14 @@ void link_task()
     {
         return;
     }
-    pthread_create(pid, NULL, pthread_link_task1, (void *)&ifd);
+    pthread_create(pid, &attr, pthread_link_task1, (void *)&ifd);
 
+    sleep(2);
+    if(-1 == ifd)
+    {
+        *pid = 0;
+        toupcam_log_f(LOG_ERROR, "abort pthread_link_task1 exit");
+    }
     //pthread_join(pt, NULL);
 
     return ;
@@ -541,6 +597,9 @@ void *pthread_server(void *pdata)
     struct sockaddr stClientaddr;
     socklen_t addrlen = sizeof(struct sockaddr_in);
     cpu_set_t mask;
+    int id;
+    pthread_t pid;
+    char cname[16] = {0};
 
     int processid = distribute_process();
     if(-1 != processid)
@@ -593,6 +652,14 @@ void *pthread_server(void *pdata)
 						toupcam_log_f(LOG_ERROR, "%s.\n", strerror(errno));
 						continue;
 					}
+
+				    if(1 == g_pstTouPcam->iconnect)
+                    {
+                        toupcam_log_f(LOG_WARNNING, "tcp connection has been establishe...\n", i, iClientFd);
+                        close(iClientFd);
+                        continue;
+                    }
+
 					if(iClientFd > iMaxfd)
 					{
 						iMaxfd = iClientFd;
@@ -600,6 +667,7 @@ void *pthread_server(void *pdata)
 					FD_SET(iClientFd, &rdfs);
 					toupcam_log_f(LOG_INFO, "tcp(%d) listen(%d)...\n", i, iClientFd);
                     link_task();
+                    g_pstTouPcam->iconnect = 1;
 				}
 				else
 				{
@@ -664,6 +732,34 @@ void *pthread_server(void *pdata)
 					}
                     else
                     {
+                        memset(cname, 0, 128);
+                        for (id = 0; id < MaxThreadNum; ++id)
+                        {
+                            pid = g_PthreadId[id];
+                            if(pid)
+                            {
+                                pthread_getname_np(pid, cname, 16);
+                                char *pc = cname+12;
+                                int iProcessid = strtol(pc, NULL, 10);
+                                if(!strncmp(cname, "link_task1", 10))
+                                {
+                                    if(iProcessid>=0 && iProcessid<g_uiProcess_num && *pc != '_' && *(pc+1) != '_')
+                                    {
+                                        g_puiProcess_task[iProcessid] = 0;
+                                        toupcam_log_f(LOG_INFO, "processor id(%d) cancel...\n", iProcessid);
+                                    }
+                                    else
+                                    {
+                                        toupcam_log_f(LOG_WARNNING, "abort processor id(%d) cancel...\n", iProcessid);
+                                    }
+                                    
+                                    toupcam_log_f(LOG_INFO, "pthread_cancel(%s)...\n", cname);
+                                    pthread_cancel(pid);
+                                    g_PthreadId[id] = 0;
+                                }
+                            }
+                        }
+                        g_pstTouPcam->iconnect = 0;
                         toupcam_log_f(LOG_INFO, "sock unconnect...\n");
                         g_pstTouPcam->SaveConfigure(g_pstTouPcam);
                         FD_CLR(i, &rdfs);
@@ -739,6 +835,59 @@ void *pthread_health_monitor(void *pdata)
     }
 
 	return NULL;
+}
+
+void *pthread_udp_distribute(void *pdata)
+{
+    cpu_set_t mask;
+
+    int processid = distribute_process();
+    if(-1 != processid)
+    {
+        CPU_ZERO(&mask);
+        CPU_SET(processid, &mask);
+        if (pthread_setaffinity_np(pthread_self(), sizeof(mask), &mask) < 0)
+        {
+            toupcam_log_f(LOG_WARNNING, "%s", strerror(errno));
+        }
+        toupcam_log_f(LOG_INFO, "thread id(%d) use process(%d)", (int)pthread_self(), processid);
+    }
+
+    while(1)
+    {
+        if(NULL == pstFixFrameRate || 0 == pstFixFrameRate->getQueueNum())
+        {
+            sleep(1);
+            continue;
+        }
+        
+        if(pstFixFrameRate->getFixnum() < frame_num)
+        {
+            usleep(100000);
+            continue;
+        }
+        
+        unsigned char *ndata = (unsigned char *)pstFixFrameRate->PopQueue();
+        if(NULL == ndata)
+        {
+            continue;
+        }
+            
+        
+#ifdef SOFT_ENCODE_H264
+        encode_yuv((unsigned char *)ndata);
+#else
+        if(g_pstmpp_enc_data && g_pstmpp_enc_data->frame_count >= MPP_FRAME_MAXNUM)
+        {
+            mpp_ctx_deinit(&g_pstmpp_enc_data);
+            init_mpp();
+        }
+        encode2hardware((unsigned char *)ndata);
+#endif
+        frame_num++;
+        usleep(10000);
+    }
+
 }
 
 void Destory_sock(void)
@@ -1068,6 +1217,18 @@ int main(int, char**)
         goto exit0_;
     }
     iRet += pthread_create(pid, NULL, pthread_health_monitor, (void *)&iPthredArg);
+    if(ERROR_FAILED == iRet)
+    {
+        goto exit0_;
+    }
+
+	/* distribute udp's data */
+    pid = distribute_thread();
+    if(NULL == pid)
+    {
+        goto exit0_;
+    }
+    iRet += pthread_create(pid, NULL, pthread_udp_distribute, (void *)&iPthredArg);
     if(ERROR_FAILED == iRet)
     {
         goto exit0_;

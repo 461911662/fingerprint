@@ -1,5 +1,6 @@
 #ifndef _COMMON_TOUPCAM_H_
 #define _COMMON_TOUPCAM_H_
+#include <sys/prctl.h>
 #include "toupcam.h"
 #include "mpp_encode_data.h"
 #include "rockchip/mpp_err.h"
@@ -13,6 +14,25 @@
 #define ROI_IMAGE
 #undef TOUPCAM_RELEASE
 #undef PICTURE_ARITHMETIC
+
+#define MINIMUM_RESOLUTION
+
+#define FIX_480P
+
+#if defined(FIX_480P)
+#define ROI_INWIDTH  720
+#define ROI_INHEIGHT 480
+#elif defined(FIX_720P)
+#define ROI_INWIDTH  1280
+#define ROI_INHEIGHT 720
+#elif defined(FIX_1080P)
+#define ROI_INWIDTH  1920
+#define ROI_INHEIGHT 1080
+#endif
+
+#define BIT_DEPTH BIT_DEPTH8
+#define BIT_DEPTH8 8
+#define FIX_FRAMERATE 24
 
 #define TOUPCAM_POWER_AC_60HZ       0
 #define TOUPCAM_POWER_AC_50HZ       1
@@ -215,6 +235,7 @@ typedef struct Toupcam_instance{
 typedef struct Toupcam
 {
     TOUPCAM_INS_S m_ins; /* Toupcam实例 */
+    int iconnect;   /* 一个手机连接 0:未连接 1:连接 */
     int inWidth;    /* 当前图片的有效宽度 */
     int inHeight;   /* 当前图片的有效高度 */
     int inMaxWidth;    /* 当前图片的支持最大有效宽度 */

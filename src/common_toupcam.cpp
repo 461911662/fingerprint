@@ -12,6 +12,7 @@
 #include "../include/common_toupcam.h"
 #include "../include/toupcam_data.h"
 #include "../include/toupcam_parse.h"
+#include "../include/fixframerate.h"
 
 using namespace std;
 
@@ -36,6 +37,9 @@ extern "C"
 extern MPP_ENC_DATA_S *g_pstmpp_enc_data;
 extern MPP_RET mpp_ctx_deinit(MPP_ENC_DATA_S **data);
 extern HashTable *g_pstToupcamHashTable;
+extern FixFrameRate *pstFixFrameRate;
+extern int frame_num;
+
 
 #define CALLBAK_TOUPCAM_KIT 1
 //#define LOWRESOLUTION 1
@@ -468,6 +472,9 @@ unsigned int StartDevice(void *pvoid)
     }
     pToupcam->m_pImageData = g_pImageData;
 
+    /* 创建固定帧循环队列 */
+    pstFixFrameRate = new FixFrameRate(g_pstTouPcam->inHeight, g_pstTouPcam->inWidth, BIT_DEPTH, FIX_FRAMERATE);
+
     /* buffer2 static picture */
     if(pToupcam->iSnapSize > 0)
     {
@@ -512,7 +519,7 @@ unsigned int StartDevice(void *pvoid)
         return toupcamerrinfo(uiCallbackContext)?ERROR_FAILED:ERROR_SUCCESS;
     }
     else
-    {
+    {        
         if(g_pstTouPcam->cfg)
         {
             putReloadercfg(g_pstTouPcam, RELOADERAFTER);
@@ -565,26 +572,24 @@ unsigned int ConfigDevice(void *pvoid)
     iRSL_Num = (int)Toupcam_get_ResolutionNumber(pTmpToupcam->m_hcam);
     if(iRSL_Num > 0)
     {
+#ifdef MINIMUM_RESOLUTION
         iRet = Toupcam_put_eSize(pTmpToupcam->m_hcam, iRSL_Num-1);  /* 预览适配最小分辨率 */
         iRet += Toupcam_get_Resolution(pTmpToupcam->m_hcam, iRSL_Num-1, &iWidth, &iHeight);
-        //iRet = Toupcam_put_eSize(pTmpToupcam->m_hcam, 0);  /* 预览适配最大分辨率 */
-        //iRet += Toupcam_get_Resolution(pTmpToupcam->m_hcam, 0, &iWidth, &iHeight);
-
+#else
+        iRet = Toupcam_put_eSize(pTmpToupcam->m_hcam, 0);  /* 预览适配最大分辨率 */
+        iRet += Toupcam_get_Resolution(pTmpToupcam->m_hcam, 0, &iWidth, &iHeight);
+#endif
         iRet += Toupcam_get_Resolution(pTmpToupcam->m_hcam, 0, &iMaxWidth, &iMaxHeight);  /* 抓拍适配最大分辨率 */
 
         nWidth = iWidth;
         nHeight = iHeight;        
         pTmpToupcam->inWidth = iWidth;
         pTmpToupcam->inHeight = iHeight;
-        /*
-        pTmpToupcam->inMaxWidth = iMaxWidth;
-        pTmpToupcam->inMaxHeight = iMaxHeight;
-		pTmpToupcam->iSnapSize = TDIBWIDTHBYTES(iMaxWidth * 24) * iMaxHeight;
-		*/
+
         pTmpToupcam->inMaxWidth = iWidth;
         pTmpToupcam->inMaxHeight = iHeight;
-		pTmpToupcam->iSnapSize = TDIBWIDTHBYTES(iWidth * 24) * iHeight;
-        pTmpToupcam->m_header.biSizeImage = TDIBWIDTHBYTES(iWidth * 24) * iHeight;
+		pTmpToupcam->iSnapSize = TDIBWIDTHBYTES(iWidth * BIT_DEPTH) * iHeight;
+        pTmpToupcam->m_header.biSizeImage = TDIBWIDTHBYTES(iWidth * BIT_DEPTH) * iHeight;
     }
     else
     {
@@ -1452,11 +1457,10 @@ static unsigned int Set_ToupcamOrientation()
     }
 
 #ifdef ROI_IMAGE
-    nWidth = 640, nHeight = 480;
-    //WIDTH = nWidth, HEIGHT = nHeight;
-    g_pstTouPcam->inHeight = g_pstTouPcam->inMaxHeight = 480;
-    g_pstTouPcam->inWidth = g_pstTouPcam->inMaxWidth = 640;
-    Toupcam_put_Roi(g_hcam, 200, 200, 640, 480);
+    nWidth = ROI_INWIDTH, nHeight = ROI_INHEIGHT;
+    g_pstTouPcam->inHeight = g_pstTouPcam->inMaxHeight = ROI_INHEIGHT;
+    g_pstTouPcam->inWidth = g_pstTouPcam->inMaxWidth = ROI_INWIDTH;
+    Toupcam_put_Roi(g_hcam, 0, 0, ROI_INWIDTH, ROI_INHEIGHT);
 #endif
 
     return ERROR_SUCCESS;
@@ -1495,7 +1499,7 @@ static unsigned int Set_ReToupcamOrientation()
 #ifdef ROI_IMAGE
     nWidth = g_pstTouPcam->inWidth;
     nHeight = g_pstTouPcam->inHeight;
-    hr = Toupcam_put_Roi(g_hcam, 200, 200, g_pstTouPcam->inWidth, g_pstTouPcam->inHeight);
+    hr = Toupcam_put_Roi(g_hcam, 0, 0, g_pstTouPcam->inWidth, g_pstTouPcam->inHeight);
     if(FAILED(hr))
     {
         toupcam_log_f(LOG_ERROR, "set frame roi failed.\n");

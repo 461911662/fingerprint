@@ -180,7 +180,8 @@ MPP_RET mpp_ctx_init(MPP_ENC_DATA_S **data)
     pstmpp->ver_stride = MPP_ALIGN(pstmpp->height, 16);
     pstmpp->fmt = MPP_FMT_YUV420P;
     pstmpp->type = MPP_VIDEO_CodingAVC;
-    pstmpp->frame_size = pstmpp->hor_stride * pstmpp->ver_stride * 3 / 2;    
+    //pstmpp->frame_size = pstmpp->hor_stride * pstmpp->ver_stride * 3 / 2;
+    pstmpp->frame_size = pstmpp->hor_stride * pstmpp->ver_stride * 3 / 2;
     pstmpp->fp_output = fopen("./camera.h264", "w+b");
 RET:
     *data = pstmpp;
@@ -208,8 +209,8 @@ MPP_RET mpp_setup(MPP_ENC_DATA_S *p)
     rc_cfg = &p->rc_cfg;
 
     /* setup default parameter */
-    p->fps = 15;
-    p->gop = 10;
+    p->fps = 25;
+    p->gop = 5;
     p->bps = p->width * p->height / 8 * p->fps;
 
     prep_cfg->change        = MPP_ENC_PREP_CFG_CHANGE_INPUT |
@@ -296,7 +297,7 @@ MPP_RET mpp_setup(MPP_ENC_DATA_S *p)
              * 77  - Main profile
              * 100 - High profile
              */
-            codec_cfg->h264.profile  = 66;
+            codec_cfg->h264.profile  = 100;
             /*
              * H.264 level_idc parameter
              * 10 / 11 / 12 / 13    - qcif@15fps / cif@7.5fps / cif@15fps / cif@30fps
@@ -517,6 +518,162 @@ static unsigned char linetran(unsigned char *pImageData, int nheight, int nwidth
 }
 
 /*
+* 图像二值化之大津法
+* 优点:更好的找出一帧像素的灰度阈值
+* 缺点:对光线有要求
+*/
+int Binarization_otsuThreshold(unsigned char *pImageData, int height, int width, int bit)
+{
+    int iRet = ERROR_SUCCESS;
+    int i, j;
+    if(NULL == pImageData || height < 0 || width < 0)
+    {
+        toupcam_log_f(LOG_ERROR, "input ptr is null");
+        return -1;
+    }
+
+    if(bit != 24)
+    {
+        toupcam_log_f(LOG_ERROR, "bit is not 24");
+        return -1;
+    }
+
+    /* 1. find threshold */
+    const int GrayScale = 256;
+    int pixelCount[GrayScale];
+    float pixelPro[GrayScale];
+    int pixelSum = width * height, threshold = 0;
+    unsigned char *data = (pImageData);
+    for (i = 0; i < GrayScale; i++)
+    {
+        pixelCount[i] = 0;
+        pixelPro[i] = 0;
+    }
+
+    //统计灰度级中每个像素在整副图像中的个数
+    for (i = 0; i < height; ++i)
+    {
+        for (j = 0; j < width*3; j+=3)
+        {
+            pixelCount[(int)data[i*width*3+j]]++;
+        }
+    }
+
+    //计算每个像素在整幅图像中的比例
+    float maxPro = 0.0;
+    for (i = 0; i < GrayScale; ++i)
+    {
+        pixelPro[i] = (float)pixelCount[i] / pixelSum;
+        if(pixelPro[i] > maxPro)
+        {
+            maxPro = pixelPro[i];
+        }
+    }
+
+    //遍历灰度级[0, 255]
+    float w0, w1, u0tmp, u1tmp, u0, u1, u, deltaTmp, deltaMax = 0;
+    for (i = 0; i < GrayScale; ++i)
+    {
+        w0 = w1 = u0tmp = u1tmp = u0 = u1 = u = deltaTmp = 0;
+        for (j = 0; j < GrayScale; ++j)
+        {
+            if(j <= i) //背景部分
+            {
+                w0 += pixelPro[j];
+                u0tmp += j * pixelPro[j];
+            }
+            else //前景部分
+            {
+                w1 += pixelPro[j];
+                u1tmp += j * pixelPro[j];
+            }
+        }
+        u0 = u0tmp / w0;
+        u1 = u1tmp / w1;
+        u = u0tmp + u1tmp;
+        deltaTmp = w0 * pow((u0 - u), 2) + w1 * pow((u1 - u), 2);
+        if(deltaTmp > deltaMax)
+        {
+            deltaMax = deltaTmp;
+            threshold = i;
+        }
+    }
+
+    /* 2.handle data */
+    if(threshold > 0)
+    {
+        for (i = 0; i < height; ++i)
+        {
+            for (j = 0; j < width*3; ++j)
+            {
+                if(data[i*width*3+j] < threshold)
+                {
+                    data[i*width*3+j] = 0;
+                }
+                else
+                {
+                    data[i*width*3+j] = 255;
+                }
+            }
+        }
+        toupcam_log_f(LOG_INFO, " is running, threshold:%d", threshold);
+    }
+
+    return ERROR_SUCCESS;
+}
+
+/*
+* 高斯滤波
+*/
+int Gaussian_func(unsigned char *pImageData, int height, int width, int bit)
+{
+    int iRet = ERROR_SUCCESS;
+    int i, j, index, sum;
+    if(NULL == pImageData || height < 0 || width < 0)
+    {
+        toupcam_log_f(LOG_ERROR, "input ptr is null");
+        return -1;
+    }
+
+    if(bit != 24)
+    {
+        toupcam_log_f(LOG_ERROR, "bit is not 24");
+        return -1;
+    }
+
+    sum = height * width * sizeof(unsigned char) * 3;
+    unsigned char *tmpdata = (unsigned char *)malloc(sum);
+    memcpy((char*)tmpdata, (char*)pImageData, sum);
+    /* 定义*3的模板 拉普拉斯 */
+    float templates[9]={1.0f,2.0f,1.0f,2.0f,4.0f,2.0f,1.0f,2.0f,1.0f};
+    /* 定义模板前乘的系数 拉普拉斯 */
+    float coef=(float)(1.0/16.0);
+
+    /* 拉普拉斯滤波 */
+    for(i=1; i<height-1; i++)
+    {
+        for(j=0; j<width*3-1; j+=3)
+        {
+            index = sum = 0;
+            for(int m = i - 1; m < i + 2; m++)
+            {
+                for(int n = j - 1; n < j + 2; n++)
+                {
+                    sum +=
+                        tmpdata[m*width*3 + n] *
+                        templates[index++];
+                }
+            }
+            pImageData[i*width*3 + j] = sum * coef;
+            pImageData[i*width*3 + j + 1] = sum * coef;
+            pImageData[i*width*3 + j + 2] = sum * coef;
+        }
+    }
+
+    free(tmpdata);
+}
+
+/*
 * 图像二值化处理
 */
 int Binarization(unsigned char *pImageData, int height, int width, int bit)
@@ -598,7 +755,20 @@ int Binarization(unsigned char *pImageData, int height, int width, int bit)
         }
     }    
 #endif
-    
+
+#ifdef GAUSSIAN_FUNC
+    iRet = Gaussian_func(pImageData, height, width, bit);
+    if(ERROR_SUCCESS != iRet)
+    {
+        toupcam_log_f(LOG_ERROR, " is Errors");
+    }
+#endif
+
+    iRet = Binarization_otsuThreshold(pImageData, height, width, bit);
+    if(ERROR_SUCCESS != iRet)
+    {
+        toupcam_log_f(LOG_ERROR, " is Errors");
+    }
 
     return 0;
 }
@@ -703,7 +873,7 @@ int image_arithmetic_handle_rgb(unsigned char *pImageData, int height, int width
 void encode_yuv(unsigned char *g_pImageData)
 {
     int width = nWidth, height = nHeight;
-    enum AVPixelFormat src_pix_fmt = AV_PIX_FMT_BGR24, dst_pix_fmt = AV_PIX_FMT_YUV420P;
+    enum AVPixelFormat src_pix_fmt = AV_PIX_FMT_GRAY8, dst_pix_fmt = AV_PIX_FMT_YUV420P;
 
     AVFrame *pFrameYUV = (AVFrame *)av_frame_alloc();
     uint8_t *out_buffer = new uint8_t[avpicture_get_size(dst_pix_fmt, width, height)];
@@ -896,14 +1066,13 @@ static unsigned int rtp_transmit(void *ptr, void *rsppsp, size_t len, size_t len
     /* encode h264 again */
     repeatencode2h264((char *)ptr, rsppsp, &ilen, len0);
 
-    struct rtp_data *pdata;
+    struct rtp_data *pdata = (struct rtp_data *)malloc(sizeof(struct rtp_data));
 	pthread_mutex_lock(&g_PthreadMutexUDP);
 	frame_size = 0;
 	for (int i = 0; i < x264Encoder.m_x264iNal; ++i)
 	{
-        pdata=(struct rtp_data *)malloc(sizeof(struct rtp_data));
+        
     	memset(pdata,0,sizeof(struct rtp_data));
-
         pdata->datalen=x264Encoder.m_pX264Nals[i].i_payload;
         unsigned char *rtpdata = (unsigned char *)malloc(pdata->datalen);
         memcpy(rtpdata, x264Encoder.m_pX264Nals[i].p_payload, pdata->datalen);
@@ -916,9 +1085,13 @@ static unsigned int rtp_transmit(void *ptr, void *rsppsp, size_t len, size_t len
     	while((rtp=rtp_pack(pdata,&head))!=NULL)
     	{
         	/* 数据发送 */
-        	rtp_send(rtp,sock);
+            if(g_pstTouPcam->iconnect)
+            {
+        	    rtp_send(rtp,sock);
+            }
             if(rtp)
             {
+                rtp->databuff=NULL;
         	    free(rtp);
                 rtp=NULL;
             }
@@ -932,17 +1105,19 @@ static unsigned int rtp_transmit(void *ptr, void *rsppsp, size_t len, size_t len
             free(pdata->buff);
             pdata->buff = NULL;
         }
-        if(pdata)
-        {
-		    free(pdata);
-            pdata = NULL;
-        }
+        
         if(x264Encoder.m_pX264Nals[i].p_payload)
         {
             free(x264Encoder.m_pX264Nals[i].p_payload);
             x264Encoder.m_pX264Nals[i].p_payload = NULL;
         }
 	}
+
+    if(pdata)
+    {
+        free(pdata);
+        pdata = NULL;
+    }
 
     if(x264Encoder.m_pX264Nals)
     {
@@ -952,7 +1127,7 @@ static unsigned int rtp_transmit(void *ptr, void *rsppsp, size_t len, size_t len
     usleep(800);
 
     /* 时间戳增加 */
-    head.timtamp+=800;
+    head.timtamp+=200;
     /* usleep(1*1000*1000); */
     pthread_mutex_unlock(&g_PthreadMutexUDP);
 
@@ -973,13 +1148,12 @@ void encoderImg(X264Encoder &x264Encoder,AVFrame *frame)
 		printf("Error.\n");
 		return;
 	}
-
+    
 	pthread_mutex_lock(&g_PthreadMutexUDP);
 	frame_size = 0;
-    struct rtp_data *pdata;
+    struct rtp_data *pdata=(struct rtp_data *)malloc(sizeof(struct rtp_data));
 	for (int i = 0; i < x264Encoder.m_x264iNal; ++i)
 	{
-        pdata=(struct rtp_data *)malloc(sizeof(struct rtp_data));
     	memset(pdata,0,sizeof(struct rtp_data));
 
         pdata->datalen=x264Encoder.m_pX264Nals[i].i_payload;
@@ -994,20 +1168,43 @@ void encoderImg(X264Encoder &x264Encoder,AVFrame *frame)
     	while((rtp=rtp_pack(pdata,&head))!=NULL)
     	{
         	/* 数据发送 */
-        	rtp_send(rtp,sock);
-        	free(rtp);
+            if(g_pstTouPcam->iconnect)
+            {
+        	    rtp_send(rtp,sock);
+            }
+            if(rtp)
+            {
+                rtp->databuff=NULL;
+        	    free(rtp);
+            }
         	rtp=NULL;
         	/* 序列号增加 */
         	head.sernum++;
         	/* usleep(500); */
 			/* printf("Send Num : %d\r\n", sendnum++); */
+
     	}
-		free(pdata);
-		pdata=NULL;
+    
+        if(rtpdata)
+        {
+            free(rtpdata);
+        }
+        rtpdata = NULL;
+
 	}
+
+    if(pdata)
+    {
+        pdata->buff = NULL;
+	    free(pdata);
+    }
+    pdata=NULL;
+    usleep(800);
+
     /* 时间戳增加 */
-    head.timtamp+=800;
+    head.timtamp+=200;
     pthread_mutex_unlock(&g_PthreadMutexUDP);
+
 }
 
 static void convertFrameToX264Img(x264_image_t *x264InImg,AVFrame *pFrameYUV)
@@ -1038,11 +1235,11 @@ bool  grb24toyuv420p(unsigned char *RgbBuf, unsigned int nWidth, unsigned int nH
         /* bufRGB = RgbBuf + nWidth * (nHeight - 1 - j) * 3 ; */
         if(0 == j)
         {
-            bufRGB = RgbBuf + nWidth * j * 3; /* 解决倒立 */
+            bufRGB = RgbBuf + nWidth * j * BIT_DEPTH / BIT_DEPTH8; /* 解决倒立 */
         }
         else
         {
-            bufRGB = RgbBuf + nWidth * j * 3 -1; /* 解决倒立 */
+            bufRGB = RgbBuf + nWidth * j * BIT_DEPTH / BIT_DEPTH8 - 1; /* 解决倒立 */
         }
         for (i = 0;i<nWidth;i++)  
         {  
@@ -1197,10 +1394,14 @@ MPP_RET mpp_encode(MPP_ENC_DATA_S *p, unsigned char *yuv, unsigned long len)
         void *ptr   = mpp_packet_get_pos(packet);
         size_t len  = mpp_packet_get_length(packet);
 
-        if(0 == p->frame_count%10)
+        if(0 == p->frame_count%5)
         {
             //fwrite(pch264spspps, 1, 45, p->fp_output);
             rtp_transmit(ptr, pch264spspps, len, len0);
+            if(5 == p->frame_count)
+            {
+                p->frame_count = 0;
+            }
         }
         else
         {
@@ -1229,7 +1430,8 @@ void encode2hardware(unsigned char *g_pImageData)
 
     MPP_RET ret = MPP_OK;
     unsigned long len = 0;
-    unsigned char *pucyuvBuf = (unsigned char *)malloc(g_pstTouPcam->inHeight*g_pstTouPcam->inWidth*2);
+    //unsigned char *pucyuvBuf = (unsigned char *)malloc(g_pstTouPcam->inHeight*g_pstTouPcam->inWidth*BIT_DEPTH/BIT_DEPTH8*2);
+    unsigned char *pucyuvBuf = (unsigned char *)malloc(g_pstTouPcam->inHeight*g_pstTouPcam->inWidth*3/2);
     if(NULL == pucyuvBuf)
     {
         perror("encode2hardware");
@@ -1240,7 +1442,7 @@ void encode2hardware(unsigned char *g_pImageData)
     //printf("yuv420 len:%d\n", len);
 
     int width = nWidth, height = nHeight;
-    enum AVPixelFormat src_pix_fmt = AV_PIX_FMT_BGR24, dst_pix_fmt = AV_PIX_FMT_YUV420P;
+    enum AVPixelFormat src_pix_fmt = AV_PIX_FMT_GRAY8, dst_pix_fmt = AV_PIX_FMT_YUV420P;
 
     AVFrame *pFrameYUV = (AVFrame *)av_frame_alloc();
     uint8_t *out_buffer = new uint8_t[avpicture_get_size(dst_pix_fmt, width, height)];
@@ -1261,7 +1463,7 @@ void encode2hardware(unsigned char *g_pImageData)
     sws_freeContext(sws_ctx);
 	av_frame_free(&rgbFrame);
     int iy_size = width * height;
-    memset(pucyuvBuf, 0, g_pstTouPcam->inHeight*g_pstTouPcam->inWidth*2);
+    memset(pucyuvBuf, 0, g_pstTouPcam->inHeight*g_pstTouPcam->inWidth*3/2);
     memcpy(pucyuvBuf, pFrameYUV->data[0], iy_size);
     memcpy(pucyuvBuf+iy_size, pFrameYUV->data[1], iy_size/4);
     memcpy(pucyuvBuf+iy_size+iy_size/4, pFrameYUV->data[2], iy_size/4);

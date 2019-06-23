@@ -13,7 +13,7 @@
 #define UDP_PORT1  5004
 #define UDP_PORT2  5008
 #define TCP_PORT  9999
-#define TCP_LISTEN_NUM 10
+#define TCP_LISTEN_NUM 1
 #define TCP_BUFFER_SIZE  1024
 #define TCP_REQUEST 0x01
 #define TCP_RESPONSE 0x02
