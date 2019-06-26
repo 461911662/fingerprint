@@ -20,7 +20,7 @@
 #define FIX_480P
 
 #if defined(FIX_480P)
-#define ROI_INWIDTH  720
+#define ROI_INWIDTH  720  /* (x,y)=(150,250) */
 #define ROI_INHEIGHT 480
 #elif defined(FIX_720P)
 #define ROI_INWIDTH  1280

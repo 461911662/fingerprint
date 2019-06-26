@@ -230,10 +230,11 @@ MPP_RET mpp_setup(MPP_ENC_DATA_S *p)
     }
 
     rc_cfg->change  = MPP_ENC_RC_CFG_CHANGE_ALL;
-    //rc_cfg->rc_mode = MPP_ENC_RC_MODE_CBR;
+    rc_cfg->rc_mode = MPP_ENC_RC_MODE_CBR;
+    rc_cfg->quality = MPP_ENC_RC_QUALITY_WORST;
     //rc_cfg->quality = MPP_ENC_RC_QUALITY_MEDIUM;
-    rc_cfg->rc_mode = MPP_ENC_RC_MODE_VBR;
-    rc_cfg->quality = MPP_ENC_RC_QUALITY_CQP;
+    //rc_cfg->rc_mode = MPP_ENC_RC_MODE_VBR;
+    //rc_cfg->quality = MPP_ENC_RC_QUALITY_CQP;
 
     if (rc_cfg->rc_mode == MPP_ENC_RC_MODE_CBR) 
     {
@@ -1216,85 +1217,112 @@ static void convertFrameToX264Img(x264_image_t *x264InImg,AVFrame *pFrameYUV)
 }
 
 
-bool  grb24toyuv420p(unsigned char *RgbBuf, unsigned int nWidth, unsigned int nHeight, unsigned char *yuvBuf,unsigned long *len)  
+bool  grbtoyuv420p(unsigned char *RgbBuf, unsigned int nWidth, unsigned int nHeight, unsigned char *yuvBuf,unsigned long *len)  
 {  
     int i, j;  
     unsigned char*bufY, *bufU, *bufV, *bufRGB,*bufYuv;  
-    memset(yuvBuf,0,(unsigned int )*len);  
+    memset(yuvBuf,128,(unsigned int )*len);  
     bufY = yuvBuf;  
     bufV = yuvBuf + nWidth * nHeight;  
     bufU = bufV + (nWidth * nHeight* 1/4);  
     *len = 0;   
-    unsigned char y, u, v, r, g, b,testu,testv;  
+    unsigned char y, u, v, r, g, b,testu,testv;
     unsigned int ylen = nWidth * nHeight;  
     unsigned int ulen = (nWidth * nHeight)/4;  
     unsigned int vlen = (nWidth * nHeight)/4; 
 
-    for (j = 0; j<nHeight;j++)  
-    {  
-        /* bufRGB = RgbBuf + nWidth * (nHeight - 1 - j) * 3 ; */
-        if(0 == j)
+    if(BIT_DEPTH == BIT_DEPTH8)
+    {
+        memcpy(bufY, RgbBuf, nWidth * nHeight);
+        #if 0
+        for (j = 0; j<nHeight;j++)
         {
-            bufRGB = RgbBuf + nWidth * j * BIT_DEPTH / BIT_DEPTH8; /* 解决倒立 */
+            /* bufRGB = RgbBuf + nWidth * (nHeight - 1 - j) * 3 ; */
+            #if 0
+            if(0 == j)
+            {
+                bufRGB = RgbBuf + nWidth * j * BIT_DEPTH / BIT_DEPTH8; /* 解决倒立 */
+            }
+            else
+            {
+                bufRGB = RgbBuf + nWidth * j * BIT_DEPTH / BIT_DEPTH8 - 1; /* 解决倒立 */
+            }
+            #endif
+            for (i = 0;i<nWidth;i++)
+            {
+                *bufY++ = *RgbBuf++;
+            }
         }
-        else
-        {
-            bufRGB = RgbBuf + nWidth * j * BIT_DEPTH / BIT_DEPTH8 - 1; /* 解决倒立 */
-        }
-        for (i = 0;i<nWidth;i++)  
+        #endif
+    }
+    else
+    {
+        for (j = 0; j<nHeight;j++)  
         {  
-            /*
-            * 左右反转
-            * if(0 == i)
-            * {
-            *     bufRGB += nWidth * 3 - 1;
-            * }
-            */
-            r = *(bufRGB++);  
-            g = *(bufRGB++);  
-            b = *(bufRGB++);
-            /*
-            * 左右反转
-            * b = *(bufRGB--);  
-            * g = *(bufRGB--);  
-            * r = *(bufRGB--);
-            */
-            y = (unsigned char)( ( 66 * r + 129 * g +  25 * b + 128) >> 8) + 16  ;            
-            u = (unsigned char)( ( -38 * r -  74 * g + 112 * b + 128) >> 8) + 128 ;            
-            v = (unsigned char)( ( 112 * r -  94 * g -  18 * b + 128) >> 8) + 128 ;  
-            /* *(bufY++) = max( 0, min(y, 255 )); */
-            *(bufY++) = (y<255?y:255)<0?0:(y<255?y:255);
-            if (j%2==0&&i%2 ==0)  
+            /* bufRGB = RgbBuf + nWidth * (nHeight - 1 - j) * 3 ; */
+            if(0 == j)
+            {
+                bufRGB = RgbBuf + nWidth * j * BIT_DEPTH / BIT_DEPTH8; /* 解决倒立 */
+            }
+            else
+            {
+                bufRGB = RgbBuf + nWidth * j * BIT_DEPTH / BIT_DEPTH8 - 1; /* 解决倒立 */
+            }
+            for (i = 0;i<nWidth;i++)  
             {  
-                if (u>255)  
+                /*
+                * 左右反转
+                * if(0 == i)
+                * {
+                *     bufRGB += nWidth * 3 - 1;
+                * }
+                */
+                r = *(bufRGB++);  
+                g = *(bufRGB++);  
+                b = *(bufRGB++);
+                /*
+                * 左右反转
+                * b = *(bufRGB--);  
+                * g = *(bufRGB--);  
+                * r = *(bufRGB--);
+                */
+                y = (unsigned char)( ( 66 * r + 129 * g +  25 * b + 128) >> 8) + 16  ;            
+                u = (unsigned char)( ( -38 * r -  74 * g + 112 * b + 128) >> 8) + 128 ;            
+                v = (unsigned char)( ( 112 * r -  94 * g -  18 * b + 128) >> 8) + 128 ;  
+                /* *(bufY++) = max( 0, min(y, 255 )); */
+                *(bufY++) = (y<255?y:255)<0?0:(y<255?y:255);
+                if (j%2==0&&i%2 ==0)  
                 {  
-                    u=255;  
-                }  
-                if (u<0)  
-                {  
-                    u = 0;  
-                }  
-                *(bufU++) =u;  
-                /* 存u分量 */
-            }  
-            else  
-            {  
-                /* 存v分量 */
-                if (i%2==0)  
-                {  
-                    if (v>255)  
+                    if (u>255)  
                     {  
-                        v = 255;  
+                        u=255;  
                     }  
-                    if (v<0)  
+                    if (u<0)  
                     {  
-                        v = 0;  
+                        u = 0;  
                     }  
-                    *(bufV++) =v;  
+                    *(bufU++) =u;  
+                    /* 存u分量 */
+                }  
+                else  
+                {  
+                    /* 存v分量 */
+                    if (i%2==0)  
+                    {  
+                        if (v>255)  
+                        {  
+                            v = 255;  
+                        }  
+                        if (v<0)  
+                        {  
+                            v = 0;  
+                        }  
+                        *(bufV++) =v;  
+                    }  
                 }  
             }  
         }  
-    }  
+    }
     *len = nWidth * nHeight+(nWidth * nHeight)/2;  
     return true;  
 }   
@@ -1339,7 +1367,7 @@ MPP_RET mpp_encode(MPP_ENC_DATA_S *p, unsigned char *yuv, unsigned long len)
             memcpy(pch264spspps, ptr, len0);
             if (p->fp_output)
             {
-                //fwrite(ptr, 1, len0, p->fp_output);
+                fwrite(ptr, 1, len0, p->fp_output);
                 //fclose(p->fp_output);
                 //printf("write finished.\n");
             }
@@ -1409,7 +1437,7 @@ MPP_RET mpp_encode(MPP_ENC_DATA_S *p, unsigned char *yuv, unsigned long len)
         }
 
         if (p->fp_output)
-            //fwrite(ptr, 1, len, p->fp_output);
+            fwrite(ptr, 1, len, p->fp_output);
         mpp_packet_deinit(&packet);
 
         //printf("encoded frame %d size %d\n", p->frame_count, len);
@@ -1438,9 +1466,10 @@ void encode2hardware(unsigned char *g_pImageData)
         return;
     }
     
-    //grb24toyuv420p(g_pImageData, g_pstTouPcam->inWidth, g_pstTouPcam->inHeight, pucyuvBuf, &len);
+    //grbtoyuv420p(g_pImageData, g_pstTouPcam->inWidth, g_pstTouPcam->inHeight, pucyuvBuf, &len);
     //printf("yuv420 len:%d\n", len);
 
+#if 1
     int width = nWidth, height = nHeight;
     enum AVPixelFormat src_pix_fmt = AV_PIX_FMT_GRAY8, dst_pix_fmt = AV_PIX_FMT_YUV420P;
 
@@ -1472,7 +1501,7 @@ void encode2hardware(unsigned char *g_pImageData)
     len = iy_size + iy_size/2;
     pFrameYUV = NULL;
     out_buffer = NULL;
-
+#endif
 #if 0        
     FILE *fp = fopen("./mcamera.yuv", "ab+");
     if(NULL == fp)
@@ -1485,6 +1514,7 @@ void encode2hardware(unsigned char *g_pImageData)
     fclose(fp);
 #endif
 
+    usleep(1000);
     ret = mpp_encode(g_pstmpp_enc_data, pucyuvBuf, len);
     if (ret) 
     {

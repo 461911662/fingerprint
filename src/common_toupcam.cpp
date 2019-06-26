@@ -876,10 +876,20 @@ static unsigned int SetReAutoExpo_Toupcam()
     Toupcam_put_AutoExpoEnable(g_pstTouPcam->m_hcam, g_pstTouPcam->stTexpo.bAutoExposure);
 
     toupcam_dbg_f(LOG_INFO, "reloader cfg stTexpo.bAutoExposure:%s\n", g_pstTouPcam->stTexpo.bAutoExposure?"enable":"disable");
-
-    Toupcam_put_AutoExpoTarget(g_pstTouPcam->m_hcam, g_pstTouPcam->stTexpo.AutoTarget);
-
-    toupcam_dbg_f(LOG_INFO, "reloader cfg stTexpo.AutoTarget:%d.\n", g_pstTouPcam->stTexpo.AutoTarget);    
+    if(!g_pstTouPcam->stTexpo.bAutoExposure)
+    {
+        if(!g_pstTouPcam->stTexpo.bAutoAGain)
+        {
+            g_pstTouPcam->stTexpo.AGain = (g_pstTouPcam->stTexpo.AnMin + g_pstTouPcam->stTexpo.AnMax) / 2 ;
+            Toupcam_put_ExpoAGain(g_pstTouPcam->m_hcam, g_pstTouPcam->stTexpo.AGain);
+        }
+    }
+    else
+    {
+        Toupcam_put_AutoExpoTarget(g_pstTouPcam->m_hcam, g_pstTouPcam->stTexpo.AutoTarget);
+        toupcam_dbg_f(LOG_INFO, "reloader cfg stTexpo.AutoTarget:%d.\n", g_pstTouPcam->stTexpo.AutoTarget); 
+    }
+   
     pthread_mutex_unlock(&g_pstTouPcam->stTexpo.mutex);
 
     toupcam_dbg_f(LOG_INFO, "reloader cfg stTexpo.Time:%uus.\n", g_pstTouPcam->stTexpo.Time);
@@ -1460,7 +1470,12 @@ static unsigned int Set_ToupcamOrientation()
     nWidth = ROI_INWIDTH, nHeight = ROI_INHEIGHT;
     g_pstTouPcam->inHeight = g_pstTouPcam->inMaxHeight = ROI_INHEIGHT;
     g_pstTouPcam->inWidth = g_pstTouPcam->inMaxWidth = ROI_INWIDTH;
-    Toupcam_put_Roi(g_hcam, 0, 0, ROI_INWIDTH, ROI_INHEIGHT);
+    hr = Toupcam_put_Roi(g_hcam, 150, 250, ROI_INWIDTH, ROI_INHEIGHT);
+    if(FAILED(hr))
+    {
+        toupcam_log_f(LOG_ERROR, "set roi (%dx%d) failed at(150, 250).\n", ROI_INWIDTH, ROI_INHEIGHT);
+        return ERROR_FAILED;
+    }
 #endif
 
     return ERROR_SUCCESS;
@@ -1499,7 +1514,7 @@ static unsigned int Set_ReToupcamOrientation()
 #ifdef ROI_IMAGE
     nWidth = g_pstTouPcam->inWidth;
     nHeight = g_pstTouPcam->inHeight;
-    hr = Toupcam_put_Roi(g_hcam, 0, 0, g_pstTouPcam->inWidth, g_pstTouPcam->inHeight);
+    hr = Toupcam_put_Roi(g_hcam, 150, 250, g_pstTouPcam->inWidth, g_pstTouPcam->inHeight);
     if(FAILED(hr))
     {
         toupcam_log_f(LOG_ERROR, "set frame roi failed.\n");
