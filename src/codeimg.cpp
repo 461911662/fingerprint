@@ -28,6 +28,9 @@ void encoderImg(X264Encoder &x264Encoder,AVFrame *frame);
 void initX264Encoder(X264Encoder &x264Encoder, const char *filePath);
 static void convertFrameToX264Img(x264_image_t *x264InImg,AVFrame *pFrameYUV);
 
+#define YUV_SIZE (1024*1022*3/2)
+static unsigned char pucyuvBuf[YUV_SIZE] = {0};
+
 
 void initX264Encoder(X264Encoder &px264Encoder, const char *filePath)
 {
@@ -210,7 +213,7 @@ MPP_RET mpp_setup(MPP_ENC_DATA_S *p)
 
     /* setup default parameter */
     p->fps = 25;
-    p->gop = 5;
+    p->gop = 25;
     p->bps = p->width * p->height / 8 * p->fps;
 
     prep_cfg->change        = MPP_ENC_PREP_CFG_CHANGE_INPUT |
@@ -1220,12 +1223,19 @@ static void convertFrameToX264Img(x264_image_t *x264InImg,AVFrame *pFrameYUV)
 bool  grbtoyuv420p(unsigned char *RgbBuf, unsigned int nWidth, unsigned int nHeight, unsigned char *yuvBuf,unsigned long *len)  
 {  
     int i, j;  
-    unsigned char*bufY, *bufU, *bufV, *bufRGB,*bufYuv;  
-    memset(yuvBuf,128,(unsigned int )*len);  
+    unsigned char*bufY, *bufU, *bufV, *bufRGB,*bufYuv;
+    static int igrbtoyuv420pflag = 0;
+    if(0 == igrbtoyuv420pflag)
+    {
+        memset(yuvBuf,128,(unsigned int )*len);
+        igrbtoyuv420pflag = 1;
+    }
     bufY = yuvBuf;  
     bufV = yuvBuf + nWidth * nHeight;  
-    bufU = bufV + (nWidth * nHeight* 1/4);  
-    *len = 0;   
+    bufU = bufV + (nWidth * nHeight* 1/4);
+#if (BIT_DEPTH != BIT_DEPTH8)
+    *len = 0;
+#endif
     unsigned char y, u, v, r, g, b,testu,testv;
     unsigned int ylen = nWidth * nHeight;  
     unsigned int ulen = (nWidth * nHeight)/4;  
@@ -1234,26 +1244,6 @@ bool  grbtoyuv420p(unsigned char *RgbBuf, unsigned int nWidth, unsigned int nHei
     if(BIT_DEPTH == BIT_DEPTH8)
     {
         memcpy(bufY, RgbBuf, nWidth * nHeight);
-        #if 0
-        for (j = 0; j<nHeight;j++)
-        {
-            /* bufRGB = RgbBuf + nWidth * (nHeight - 1 - j) * 3 ; */
-            #if 0
-            if(0 == j)
-            {
-                bufRGB = RgbBuf + nWidth * j * BIT_DEPTH / BIT_DEPTH8; /* 解决倒立 */
-            }
-            else
-            {
-                bufRGB = RgbBuf + nWidth * j * BIT_DEPTH / BIT_DEPTH8 - 1; /* 解决倒立 */
-            }
-            #endif
-            for (i = 0;i<nWidth;i++)
-            {
-                *bufY++ = *RgbBuf++;
-            }
-        }
-        #endif
     }
     else
     {
@@ -1323,7 +1313,9 @@ bool  grbtoyuv420p(unsigned char *RgbBuf, unsigned int nWidth, unsigned int nHei
             }  
         }  
     }
-    *len = nWidth * nHeight+(nWidth * nHeight)/2;  
+#if (BIT_DEPTH != BIT_DEPTH8)
+    *len = nWidth * nHeight+(nWidth * nHeight)/2;
+#endif
     return true;  
 }   
 
@@ -1422,7 +1414,7 @@ MPP_RET mpp_encode(MPP_ENC_DATA_S *p, unsigned char *yuv, unsigned long len)
         void *ptr   = mpp_packet_get_pos(packet);
         size_t len  = mpp_packet_get_length(packet);
 
-        if(0 == p->frame_count%5)
+        if(0 == p->frame_count%25)
         {
             //fwrite(pch264spspps, 1, 45, p->fp_output);
             rtp_transmit(ptr, pch264spspps, len, len0);
@@ -1457,9 +1449,9 @@ void encode2hardware(unsigned char *g_pImageData)
         return;
 
     MPP_RET ret = MPP_OK;
-    unsigned long len = 0;
+    unsigned long len = g_pstTouPcam->inHeight*g_pstTouPcam->inWidth*3/2;
     //unsigned char *pucyuvBuf = (unsigned char *)malloc(g_pstTouPcam->inHeight*g_pstTouPcam->inWidth*BIT_DEPTH/BIT_DEPTH8*2);
-    unsigned char *pucyuvBuf = (unsigned char *)malloc(g_pstTouPcam->inHeight*g_pstTouPcam->inWidth*3/2);
+    //unsigned char *pucyuvBuf = (unsigned char *)malloc(len);
     if(NULL == pucyuvBuf)
     {
         perror("encode2hardware");
@@ -1486,13 +1478,13 @@ void encode2hardware(unsigned char *g_pImageData)
     SwsContext *sws_ctx = sws_getContext(
         width, height, src_pix_fmt,
         width, height, dst_pix_fmt,
-        SWS_BILINEAR, NULL, NULL, NULL);
+        SWS_POINT, NULL, NULL, NULL);
 
     sws_scale(sws_ctx, rgbFrame->data, rgbFrame->linesize, 0, height, pFrameYUV->data, pFrameYUV->linesize);
     sws_freeContext(sws_ctx);
 	av_frame_free(&rgbFrame);
     int iy_size = width * height;
-    memset(pucyuvBuf, 0, g_pstTouPcam->inHeight*g_pstTouPcam->inWidth*3/2);
+    //memset(pucyuvBuf, 0, g_pstTouPcam->inHeight*g_pstTouPcam->inWidth*3/2);
     memcpy(pucyuvBuf, pFrameYUV->data[0], iy_size);
     memcpy(pucyuvBuf+iy_size, pFrameYUV->data[1], iy_size/4);
     memcpy(pucyuvBuf+iy_size+iy_size/4, pFrameYUV->data[2], iy_size/4);
@@ -1514,15 +1506,14 @@ void encode2hardware(unsigned char *g_pImageData)
     fclose(fp);
 #endif
 
-    usleep(1000);
     ret = mpp_encode(g_pstmpp_enc_data, pucyuvBuf, len);
     if (ret) 
     {
         printf("mpp_encode failed ret %d\n", ret);
     }
 
-    free(pucyuvBuf);
-    pucyuvBuf = NULL;
+    //free(pucyuvBuf);
+    //pucyuvBuf = NULL;
 
     return;
 }

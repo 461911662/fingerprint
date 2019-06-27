@@ -426,6 +426,7 @@ static int setexpotype(int fd, void *pdata)
             goto _exit0;
         }
 
+        /* 更新相机曝光目标 */
         hr = Toupcam_get_AutoExpoTarget(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.AutoTarget);
         if (FAILED(hr))
         {
@@ -439,6 +440,15 @@ static int setexpotype(int fd, void *pdata)
         printf("cur expo mode:%s\n", g_pstTouPcam->stTexpo.bAutoExposure?"auto":"manu");
     }
     stToupcamRespon.data.expotype = g_pstTouPcam->stTexpo.bAutoExposure;
+    
+    /* 更新相机曝光增益 */
+    hr = Toupcam_get_ExpoAGain(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.AGain);
+    if (FAILED(hr))
+    {
+        printf("get expo AGain failly(%lld)!\n", hr);;
+        goto _exit0;
+    }
+
     pthread_mutex_unlock(&g_pstTouPcam->stTexpo.mutex);
 
     stToupcamRespon.com.size[0] = COMMON_BUFF_SIZE+1;
@@ -513,6 +523,14 @@ static int setexpo(int fd, void *pdata)
     else
     {
         printf("not set expo,because of this is manu mode!!!\n");
+        goto _exit0;
+    }
+
+    /* 更新相机曝光增益 */
+    hr = Toupcam_get_ExpoAGain(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.AGain);
+    if (FAILED(hr))
+    {
+        printf("get expo AGain failly(%lld)!\n", hr);;
         goto _exit0;
     }
 
