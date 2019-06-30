@@ -1571,4 +1571,26 @@ int fillresponheader(TOUPCAM_COMMON_RESPON_S *respon)
     return ERROR_SUCCESS;
 }
 
+/*
+* Toupcam 请求通用头
+*/
+int fillrequestionheader(TOUPCAM_COMMON_RESPON_S *request)
+{
+    if(NULL == request)
+    {
+        toupcam_log_f(LOG_ERROR, "input is invaild.\n");
+        return ERROR_FAILED;
+    }
+    request->com.cmd = COMCMD_WIFICFG;
+    sprintf(request->com.proto, "%s", "proto");
+    request->com.proto[4] = 'o';
+    request->com.type = TCP_RESPONSE;
+    request->com.size[0] = INVAILD_BUFF_SIZE;
+    request->com.size[1] = 0;
+    request->cc = ERROR_SUCCESS;
+    memset(request->data.reserve, 0, ARRAY_SIZE(request->data.reserve));
+
+    return ERROR_SUCCESS;
+
+}
 

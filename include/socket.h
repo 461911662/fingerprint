@@ -15,8 +15,8 @@
 #define TCP_PORT  9999
 #define TCP_LISTEN_NUM 1
 #define TCP_BUFFER_SIZE  1024
-#define TCP_REQUEST 0x01
-#define TCP_RESPONSE 0x02
+#define TCP_REQUEST 0x01   /* 服务端请求手机端 */
+#define TCP_RESPONSE 0x02  /* 服务端响应手机端请求 */
 #define UDP_DATATSM 0x05
 #define TCP_BUFFERSIZE 1024
 //#define TCP_BUFFERSIZE 1023

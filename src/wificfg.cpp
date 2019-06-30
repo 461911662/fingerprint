@@ -35,7 +35,7 @@ static int setudpaddr(int fd, void *pdata)
 
     if(TCP_REQUEST != pstToupcamReq->com.type)
     {
-        printf("IPV6 is not support yet.\n");
+        printf("invaild request type.\n");
         goto _exit0;
     }
 
@@ -108,6 +108,69 @@ _exit0:
 }
 
 
+static int disconnecttcp(int fd, void *pdata)
+{
+    if(fd < 0 || NULL == pdata)
+    {
+        toupcam_dbg_f(LOG_DEBUG ,"input param is invaild.\n");
+        return ERROR_FAILED;
+    }
+
+    int iRet = 0;
+    TOUPCAM_COMMON_RESPON_S stToupcamRespon;
+    TOUPCAM_COMMON_REQUES_S *pstToupcamReq = (TOUPCAM_COMMON_REQUES_S *)pdata;
+
+    fillresponheader(&stToupcamRespon);
+    stToupcamRespon.com.cmd = COMCMD_WIFICFG;
+    stToupcamRespon.com.subcmd = CMD_SETUDPADDR;
+    stToupcamRespon.com.size[0] = INVAILD_BUFF_SIZE;
+
+    if(!g_pstTouPcam->m_hcam)
+    {
+        toupcam_dbg_f(LOG_ERROR ,"input param is invaild.\n");
+        return ERROR_FAILED;
+    }
+
+    if(TCP_REQUEST != pstToupcamReq->com.type)
+    {
+        toupcam_dbg_f(LOG_ERROR ,"invaild request type.\n");
+        goto _exit0;
+    }
+    
+    stToupcamRespon.com.size[0] = COMMON_BUFF_SIZE;
+    
+    return ERROR_SUCCESS;
+
+_exit0:
+    return ERROR_FAILED;
+
+}
+
+int setdisconnecttcp(int fd)
+{
+    if(fd < 0)
+    {
+        printf("input parameter is invaild.\n");
+        return ERROR_FAILED;
+    }
+
+    int iRet;
+    /* fill common cmd header  */
+    TOUPCAM_COMMON_RESPON_S stToupcamRequest;
+    fillrequestionheader(&stToupcamRequest);
+    stToupcamRequest.com.subcmd = CMD_DISCONNECTTCP;
+    stToupcamRequest.com.size[0] = sizeof(stToupcamRequest.com.type) + sizeof(stToupcamRequest.com.cmd)
+                                + sizeof(stToupcamRequest.com.subcmd);
+    iRet = send(fd, &stToupcamRequest, TOUPCAM_COMMON_RESPON_HEADER_SIZE-1, 0);
+    if(iRet <= 0)
+    {
+        toupcam_dbg_f(LOG_ERROR, "socket (%d) send failed!\n", fd);
+    }
+
+    return ERROR_SUCCESS;
+    
+}
+
 int common_wifi_cmd(int fd, void *pdata, unsigned short usSize)
 {
     if(fd < 0 || NULL == pdata)
@@ -131,6 +194,8 @@ int common_wifi_cmd(int fd, void *pdata, unsigned short usSize)
     {
         case CMD_SETUDPADDR:
             return setudpaddr(fd, pstToupcamReq);
+        case CMD_DISCONNECTTCP:
+            return disconnecttcp(fd, pstToupcamReq);
         default:
             return NOTSUPPORT;
     }

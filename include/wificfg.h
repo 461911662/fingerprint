@@ -4,5 +4,7 @@
 
 extern int common_wifi_cmd(int fd, void *pdata, unsigned short usSize);
 extern int fillresponheader(TOUPCAM_COMMON_RESPON_S *respon);
+extern int fillrequestionheader(TOUPCAM_COMMON_RESPON_S * request);
+extern int setdisconnecttcp(int fd);
 
 #endif

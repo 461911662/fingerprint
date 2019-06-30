@@ -71,6 +71,7 @@ enum TOUPCAM_CMD_E{
     CMD_RESETSERVER,        /* 重启服务器 */
     /* wifi cfg */
     CMD_SETUDPADDR = 128,         /* UDP 设置客户端地址 */
+    CMD_DISCONNECTTCP,            /* 断开TCP客户端 */
 };
 
 enum TOUPCAM_CC_CODE_E{
@@ -236,6 +237,7 @@ typedef struct Toupcam
 {
     TOUPCAM_INS_S m_ins; /* Toupcam实例 */
     int iconnect;   /* 一个手机连接 0:未连接 1:连接 */
+    int iconnect_fd;    /* 当前连接时的fd */
     int inWidth;    /* 当前图片的有效宽度 */
     int inHeight;   /* 当前图片的有效高度 */
     int inMaxWidth;    /* 当前图片的支持最大有效宽度 */

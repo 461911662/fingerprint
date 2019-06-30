@@ -21,6 +21,7 @@
 #include "../include/x264.h"
 #include "../include/codeimg.h"
 #include "../include/rtp.h"
+#include "../include/wificfg.h"
 #include "../include/toupcam.h"
 #include "../include/toupcam_log.h"
 #include "../include/common_toupcam.h"
@@ -653,11 +654,23 @@ void *pthread_server(void *pdata)
 						continue;
 					}
 
-				    if(1 == g_pstTouPcam->iconnect)
+                    if(g_pstTouPcam->iconnect)
                     {
-                        toupcam_log_f(LOG_WARNNING, "tcp connection has been establishe...\n", i, iClientFd);
-                        close(iClientFd);
-                        continue;
+                        toupcam_dbg_f(LOG_INFO, "iconnect_fd:%d,client_fd:%d\n", g_pstTouPcam->iconnect_fd, iClientFd);
+                        iRet = send(g_pstTouPcam->iconnect_fd, "0000\r\n", 6, 0); /* 检查是否断线，重连 */
+                        toupcam_dbg_f(LOG_INFO, "errno=%s(%d), iRet:%d\n", strerror(errno), errno, iRet);
+                        if(0 < iRet)
+                        {
+                            toupcam_log_f(LOG_WARNNING, "tcp connection has been establishe,new connect(%d), old connect(%d), close new connect\n", iClientFd, g_pstTouPcam->iconnect_fd);
+                            setdisconnecttcp(iClientFd);
+                            close(iClientFd); /* 关掉额外的socket */
+                            continue;
+                        }
+                        else
+                        {
+                            FD_CLR(g_pstTouPcam->iconnect_fd, &rdfs);
+                            close(g_pstTouPcam->iconnect_fd);
+                        }
                     }
 
 					if(iClientFd > iMaxfd)
@@ -665,12 +678,14 @@ void *pthread_server(void *pdata)
 						iMaxfd = iClientFd;
 					}
 					FD_SET(iClientFd, &rdfs);
+                    g_pstTouPcam->iconnect = 1;
+                    g_pstTouPcam->iconnect_fd = iClientFd;
 					toupcam_log_f(LOG_INFO, "tcp(%d) listen(%d)...\n", i, iClientFd);
                     link_task();
-                    g_pstTouPcam->iconnect = 1;
 				}
 				else
 				{
+                    toupcam_log(LOG_INFO, "cur socket fd:%d, has socket fd:%d\n", i, g_pstTouPcam->iconnect_fd);
 					memset(g_cBuffData, 0, ARRAY_SIZE(g_cBuffData));
 					iRet = read(i, g_cBuffData, sizeof(TOUPCAM_COMMON_REQUES_S));
 					if(iRet > 0)
@@ -760,8 +775,10 @@ void *pthread_server(void *pdata)
                             }
                         }
                         g_pstTouPcam->iconnect = 0;
+                        g_pstTouPcam->iconnect_fd = 0;
                         toupcam_log_f(LOG_INFO, "sock unconnect...\n");
                         g_pstTouPcam->SaveConfigure(g_pstTouPcam);
+                        iMaxfd = iServerFd; /* 只需连接一个 */
                         FD_CLR(i, &rdfs);
                         close(i);
                     }
