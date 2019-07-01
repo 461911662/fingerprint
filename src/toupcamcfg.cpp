@@ -277,6 +277,7 @@ static int setbrightnesstype(int fd, void *pdata)
 
     stToupcamRespon.com.size[0] = COMMON_BUFF_SIZE+1;
     send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE+1, 0);
+    export_syncserverdata(fd);
 
     return ERROR_SUCCESS;
 
@@ -453,13 +454,14 @@ static int setexpotype(int fd, void *pdata)
 
     stToupcamRespon.com.size[0] = COMMON_BUFF_SIZE+1;
     send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE+1, 0);
+    export_syncserverdata(fd);
     return ERROR_SUCCESS;   
 
 _exit0:
     pthread_mutex_unlock(&g_pstTouPcam->stTexpo.mutex);
     stToupcamRespon.cc = ERROR_FAILED;
     send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE+1, 0);
-
+	
     return ERROR_FAILED;
 }
 
@@ -537,6 +539,7 @@ static int setexpo(int fd, void *pdata)
     pthread_mutex_unlock(&g_pstTouPcam->stTexpo.mutex);
 
     send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE+2, 0);
+    export_syncserverdata(fd);
 
     return ERROR_SUCCESS;    
 
@@ -597,6 +600,7 @@ static int setcontrasttype(int fd, void *pdata)
 
     stToupcamRespon.com.size[0] = COMMON_BUFF_SIZE+1;
     send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE+1, 0);
+    export_syncserverdata(fd);
     
     return ERROR_SUCCESS;
 
@@ -834,6 +838,7 @@ static int sethistogramtype(int fd, void *pdata)
     stToupcamRespon.com.size[0] = COMMON_BUFF_SIZE+1;
     stToupcamRespon.data.historamtype = g_pstTouPcam->stHistoram.bAutoHis;
     send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE+1, 0);
+    export_syncserverdata(fd);
 
     return ERROR_SUCCESS;    
 
@@ -1047,7 +1052,7 @@ void export_syncserverdata(int fd)
 	int iRet;
 	TOUPCAM_COMMON_REQUES_S data;
 	data.com.type = TCP_REQUEST;
-	iRet = syncserverdata(fd, (void *)&data)
+	iRet = syncserverdata(fd, (void *)&data);
 	if(ERROR_FAILED == iRet)
 	{
 		toupcam_log_f(LOG_ERROR, "sync server data failed");
