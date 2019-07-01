@@ -18,5 +18,6 @@ extern pthread_mutex_t g_PthreadMutexMonitor;
 
 extern int common_toupcam_cmd(int fd, void *pdata, unsigned short usSize);
 extern int fillresponheader(TOUPCAM_COMMON_RESPON_S *respon);
+extern void export_syncserverdata(int fd);
 
 #endif
