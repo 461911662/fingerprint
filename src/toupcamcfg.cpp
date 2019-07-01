@@ -1039,6 +1039,11 @@ _exit0:
 
 void export_syncserverdata(int fd)
 {
+	if(fd <= 0)
+	{
+		toupcam_log_f(LOG_ERROR, "invaild fd");
+		return;
+	}
 	int iRet;
 	TOUPCAM_COMMON_REQUES_S data;
 	data.com.type = TCP_REQUEST;
@@ -1047,6 +1052,7 @@ void export_syncserverdata(int fd)
 	{
 		toupcam_log_f(LOG_ERROR, "sync server data failed");
 	}
+	return;
 }
 
 int common_toupcam_cmd(int fd, void *pdata, unsigned short usSize)
