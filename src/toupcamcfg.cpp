@@ -1037,6 +1037,18 @@ _exit0:
     return hr;
 }
 
+void export_syncserverdata(int fd)
+{
+	int iRet;
+	TOUPCAM_COMMON_REQUES_S data;
+	data.com.type = TCP_REQUEST;
+	iRet = syncserverdata(fd, (void *)&data)
+	if(ERROR_FAILED == iRet)
+	{
+		toupcam_log_f(LOG_ERROR, "sync server data failed");
+	}
+}
+
 int common_toupcam_cmd(int fd, void *pdata, unsigned short usSize)
 {
     if(fd < 0 || NULL == pdata)
