@@ -681,6 +681,9 @@ void *pthread_server(void *pdata)
                     g_pstTouPcam->iconnect = 1;
                     g_pstTouPcam->iconnect_fd = iClientFd;
 					toupcam_log_f(LOG_INFO, "tcp(%d) listen(%d)...\n", i, iClientFd);
+					export_syncserverdata(iClientFd);
+					export_syncserverdata(iClientFd);
+					export_syncserverdata(iClientFd);	
                     link_task();
 				}
 				else
