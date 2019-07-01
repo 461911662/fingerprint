@@ -22,6 +22,7 @@
 #include "../include/codeimg.h"
 #include "../include/rtp.h"
 #include "../include/wificfg.h"
+#include "../include/toupcamcfg.h"
 #include "../include/toupcam.h"
 #include "../include/toupcam_log.h"
 #include "../include/common_toupcam.h"
