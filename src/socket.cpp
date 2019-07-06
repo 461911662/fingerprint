@@ -8,6 +8,7 @@
 #include "../include/socket.h"
 #include "../include/Error.h"
 #include "../include/common_toupcam.h"
+#include "../include/toupcam_log.h"
 
 char g_cBuffData[TCP_BUFFER_SIZE] = {0};
 char g_ReqResFlag;
@@ -16,7 +17,7 @@ void common_hander(int fd, void *pBuff, unsigned int uiSize)
 {
     if(fd < 0 || NULL == pBuff)
     {
-        printf("%s: parse fail", __func__);
+        toupcam_log_f(LOG_ERROR, "parse fail");
         return;
     }
 
@@ -49,7 +50,7 @@ int socket_setup(SOCKCONFIG *socketconfig)
  
     if ((s=socket(AF_INET, (socketconfig->type), (socketconfig->protocol)))== -1)
     {
-        fail("socket: %s\n", strerror(errno));
+        toupcam_log_f(LOG_ERROR, "socket: %s\n", strerror(errno)); 
     }
  
     return s;
@@ -63,7 +64,7 @@ struct sockets *get_sockets(int sock)
     soc = (struct sockets *)malloc(sizeof(struct sockets));
     if (soc == NULL)
     {
-        warn("malloc failed.\n");
+        toupcam_log_f(LOG_ERROR, "malloc failed.\n");
         return NULL;
     }
  

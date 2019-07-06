@@ -25,6 +25,7 @@
 #include "../include/toupcamcfg.h"
 #include "../include/toupcam.h"
 #include "../include/toupcam_log.h"
+#include "../include/toupcamqueue.h"
 #include "../include/common_toupcam.h"
 #include "../include/mpp_encode_data.h"
 #include "../include/toupcam_data.h"
@@ -72,6 +73,7 @@ unsigned int giJpgSize=1024*1022;
 
 /* 控制帧率 */
 FixFrameRate *pstFixFrameRate = NULL;
+TOUPCAM_DATA_QUEUE_S *g_pstDataQueue = NULL;
 
 /* 大小端标志 */
 unsigned int iEndianness = 0;
@@ -281,12 +283,24 @@ void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx)
     ToupcamFrameInfoV2 info = { 0 };
     unsigned int *puiCallbackCtx = (unsigned int *)pCallbackCtx;
     *puiCallbackCtx = 0;
+    int index = 0;
 
     switch(nEvent)
     {
         case TOUPCAM_EVENT_IMAGE:
-            memset(g_pImageData, 0, sizeof(g_pstTouPcam->m_header.biSizeImage));
+#ifdef FIX_FRAMERATE_QUEUE
+            index = InQueue(g_pstDataQueue);
+            hr = Toupcam_PullImageV2(g_hcam, g_pstDataQueue->acdata[index], BIT_DEPTH, &info);
+#else
+    	    //if(0 != pstFixFrameRate->tryholdlock())
+    	    //{
+    		    //printf("try lock failed\n");
+    		    //break;
+    	    //}
+    	    pstFixFrameRate->holdlock();
+            //memset(g_pImageData, 0, sizeof(g_pstTouPcam->m_header.biSizeImage));
             hr = Toupcam_PullImageV2(g_hcam, g_pImageData, BIT_DEPTH, &info);
+#endif
 
             /* 算法处理 */
 #ifdef PICTURE_ARITHMETIC
@@ -310,8 +324,13 @@ void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx)
                     fclose(fp);
                 }
                 */
+#ifndef FIX_FRAMERATE_QUEUE
                 pstFixFrameRate->PushQueue((char *)g_pImageData);
             }
+	        pstFixFrameRate->releaselock();
+#else
+            }
+#endif
             break;
         case TOUPCAM_EVENT_STILLIMAGE:
             toupcam_log_f(LOG_INFO, "toupcam event TOUPCAM_EVENT_STILLIMAGE(%d).\n", nEvent);
@@ -534,7 +553,7 @@ void *pthread_link_task1(void *argv)
         /* pthread_mutex_lock(&g_PthreadMutexUDP); */
         if((iNum=sendto(sock->local, pcdes, iLen, 0, (struct sockaddr *)sock->cliaddr[1], sizeof(struct sockaddr_in)))==-1)
         {
-            fail("socket: %s\n", strerror(errno));
+            toupcam_dbg_f(LOG_ERROR, "socket: %s\n", strerror(errno));
         }
         /* pthread_mutex_unlock(&g_PthreadMutexUDP); */
 
@@ -746,8 +765,15 @@ void *pthread_server(void *pdata)
                         {
                             uiSize = stToupcam_common_req.com.size[0];
                         }
-						g_ReqResFlag = stToupcam_common_req.com.type;
-                        common_hander(i, (void *)&stToupcam_common_req, uiSize);
+                        g_ReqResFlag = stToupcam_common_req.com.type;
+                        if(g_pstTouPcam->iconnect_fd == i)
+                        {
+                            common_hander(i, (void *)&stToupcam_common_req, uiSize);
+                        }
+                        else
+                        {
+                            toupcam_log_f(LOG_WARNNING, "refuse to unauthorized socket(%d) entry...", i);
+                        }
 					}
                     else
                     {
@@ -861,7 +887,7 @@ void *pthread_health_monitor(void *pdata)
 void *pthread_udp_distribute(void *pdata)
 {
     cpu_set_t mask;
-
+    int index;
     int processid = distribute_process();
     if(-1 != processid)
     {
@@ -876,21 +902,45 @@ void *pthread_udp_distribute(void *pdata)
 
     while(1)
     {
+#ifndef FIX_FRAMERATE_QUEUE
         if(NULL == pstFixFrameRate || 0 == pstFixFrameRate->getQueueNum())
+#else
+        if(NULL == g_pstDataQueue || 0 == g_pstDataQueue->iCnt)
+#endif
         {
             sleep(1);
             continue;
         }
-        
+
+#ifndef FIX_FRAMERATE_QUEUE        
         if(pstFixFrameRate->getFixnum() < frame_num)
         {
+#else
+        if(FIX_FRAMERATE < frame_num)
+        {
+            (void)DeQueue(g_pstDataQueue);
+#endif
             usleep(100000);
             continue;
         }
-        
+
+#ifndef FIX_FRAMERATE_QUEUE        
+    	if(0 != pstFixFrameRate->tryholdlock())
+    	{
+    	    //printf("try lock failed\n");
+    	    continue;
+    	}
         unsigned char *ndata = (unsigned char *)pstFixFrameRate->PopQueue();
+#else
+        index = DeQueue(g_pstDataQueue);
+        unsigned char *ndata = (unsigned char *)g_pstDataQueue->acdata[index];
+#endif
+
         if(NULL == ndata)
         {
+#ifndef FIX_FRAMERATE_QUEUE
+	        pstFixFrameRate->releaselock();
+#endif
             continue;
         }
             
@@ -906,6 +956,10 @@ void *pthread_udp_distribute(void *pdata)
         encode2hardware((unsigned char *)ndata);
 #endif
         frame_num++;
+
+#ifndef FIX_FRAMERATE_QUEUE
+	    pstFixFrameRate->releaselock();
+#endif
         usleep(10000);
     }
 

@@ -165,7 +165,7 @@ MPP_RET mpp_ctx_init(MPP_ENC_DATA_S **data)
 
     if (NULL == data) 
     {
-        printf("invalid input data %p cmd %p\n", data);
+        printf("invalid input data %p cmd %p\n", (void*)data, (void*)*data);
         return MPP_ERR_NULL_PTR;
     }
 

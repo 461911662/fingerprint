@@ -10,6 +10,7 @@
 #include "../include/toupcamcfg.h"
 #include "../include/libavutil/frame.h"
 #include "../include/common_toupcam.h"
+#include "../include/toupcamqueue.h"
 #include "../include/toupcam_data.h"
 #include "../include/toupcam_parse.h"
 #include "../include/fixframerate.h"
@@ -38,6 +39,7 @@ extern MPP_ENC_DATA_S *g_pstmpp_enc_data;
 extern MPP_RET mpp_ctx_deinit(MPP_ENC_DATA_S **data);
 extern HashTable *g_pstToupcamHashTable;
 extern FixFrameRate *pstFixFrameRate;
+extern TOUPCAM_DATA_QUEUE_S *g_pstDataQueue;
 extern int frame_num;
 
 
@@ -474,6 +476,7 @@ unsigned int StartDevice(void *pvoid)
 
     /* 创建固定帧循环队列 */
     pstFixFrameRate = new FixFrameRate(g_pstTouPcam->inHeight, g_pstTouPcam->inWidth, BIT_DEPTH, FIX_FRAMERATE);
+    g_pstDataQueue = CreateQueue(g_pstTouPcam->inHeight, g_pstTouPcam->inWidth, BIT_DEPTH);
 
     /* buffer2 static picture */
     if(pToupcam->iSnapSize > 0)

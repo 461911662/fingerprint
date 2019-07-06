@@ -27,6 +27,21 @@ int FixFrameRate::getFixnum()
     return this->fixnum;
 }
 
+void FixFrameRate::holdlock()
+{
+	pthread_mutex_lock(&lock);
+}
+
+void FixFrameRate::releaselock()
+{
+	pthread_mutex_unlock(&lock);
+}
+
+int FixFrameRate::tryholdlock()
+{
+	return pthread_mutex_trylock(&lock);
+}
+
 void FixFrameRate::PushQueue(char *byte)
 {
 	if(NULL == byte)
@@ -34,7 +49,6 @@ void FixFrameRate::PushQueue(char *byte)
 		cout << __func__ <<": input invalid" << endl;
 		return;
 	}
-	pthread_mutex_lock(&lock);
 	if(this->fixnum == this->iCnt)
 	{
 		this->ndata->pop_front();
@@ -44,7 +58,6 @@ void FixFrameRate::PushQueue(char *byte)
 	ndata->push_back(byte);
 	this->iCnt++;
     //cout << "cur Queue Num:" << this->iCnt << endl;
-	pthread_mutex_unlock(&lock);
 	return;
 }
 
@@ -55,17 +68,14 @@ char* FixFrameRate::PopQueue()
         return NULL;
     }
     
-	pthread_mutex_lock(&lock);
 	if(1 == this->iCnt)
 	{
-	    pthread_mutex_unlock(&lock);
 		return ndata->front();
 	}
 	char *pcTmp = ndata->front();
 	this->ndata->pop_front();
 	this->iCnt--;
     //cout << "cur Queue Num:" << this->iCnt << endl;
-	pthread_mutex_unlock(&lock);
 	return pcTmp;
 }
 

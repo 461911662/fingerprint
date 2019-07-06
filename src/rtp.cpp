@@ -7,6 +7,8 @@
 #include <string.h> 
 #include "../include/rtp.h"
 #include "../include/socket.h"
+#include "../include/toupcam_log.h"
+#include "../include/common_toupcam.h"
 
 static unsigned char _ucbuf[MAX_PACK_LEN+RTP_HEAD_LEN+2+1]={0}; 
  
@@ -272,7 +274,7 @@ char rtp_send(struct rtp_pack *rtp,struct sockets *sock)
     /* 通过网络将数据发送出去 */
     if((num=sendto(sock->local,rtp->databuff,rtp->packlen,0,(struct sockaddr *)sock->cliaddr[0],sizeof(struct sockaddr_in)))==-1)
     {
-        fail("socket: %s\n", strerror(errno));
+        toupcam_dbg_f(LOG_ERROR, "socket: %s\n", strerror(errno));
     }
     unsigned char datartp[rtp->packlen];
     /*

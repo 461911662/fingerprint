@@ -26,7 +26,7 @@ ERRORINFO_S g_astERRINFO[] = {
 };
 unsigned int g_astERRINFOSIZE = ARRAY_SIZE(g_astERRINFO);
 
-char *toupcamerrinfo(unsigned int uiCallbackContext)
+const char *toupcamerrinfo(unsigned int uiCallbackContext)
 {
     int i;
     for(i=0; i<g_astERRINFOSIZE; i++)

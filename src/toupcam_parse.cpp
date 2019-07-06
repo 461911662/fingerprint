@@ -406,7 +406,7 @@ int toupcam_parse_cfg(void *ptable, int method)
             }
             else if(LONGLONG64 == g_astToupcamDataCfg[i].attr)
             {
-                snprintf(cStr, ARRAY_SIZE(cStr), "%ld", *((long long *)g_astToupcamDataCfg[i].pvoid));
+                snprintf(cStr, ARRAY_SIZE(cStr), "%lld", *((long long *)g_astToupcamDataCfg[i].pvoid));
             }
             else if(FLOAT == g_astToupcamDataCfg[i].attr)
             {

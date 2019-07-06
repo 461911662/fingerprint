@@ -33,6 +33,7 @@
 #define BIT_DEPTH BIT_DEPTH8
 #define BIT_DEPTH8 8
 #define FIX_FRAMERATE 24
+#undef FIX_FRAMERATE_QUEUE
 
 #define TOUPCAM_POWER_AC_60HZ       0
 #define TOUPCAM_POWER_AC_50HZ       1

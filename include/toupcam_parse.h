@@ -12,7 +12,7 @@
 
 typedef struct Toupcam_Data_Cfg{
     int index;
-    char *pname;
+    const char *pname;
     void *pvoid;
     int attr;
 }TOUPCAM_DATA_CFG_S;

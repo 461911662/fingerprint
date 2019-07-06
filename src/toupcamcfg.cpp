@@ -8,6 +8,7 @@
 #include <sys/socket.h>
 #include "../include/toupcamcfg.h"
 #include "../include/common_toupcam.h"
+#include "../include/toupcam_log.h"
 #include "../include/toupcam.h"
 #include "../include/socket.h"
 
@@ -37,7 +38,7 @@ static int blackrorator(int fd, void *pdata)
 {
     if(fd < 0 || NULL == pdata)
     {
-        printf("%s: input param is invaild.\n", __func__);
+        toupcam_dbg_f(LOG_ERROR, "input param is invaild.\n");
         return ERROR_FAILED;
     }
 
@@ -53,7 +54,7 @@ static int blackrorator(int fd, void *pdata)
 
     if(!g_pstTouPcam->m_hcam)
     {
-        printf("%s: toupcam->m_hcam is invaild.\n", __func__);
+        toupcam_dbg_f(LOG_ERROR, "toupcam->m_hcam is invaild.\n");
         return ERROR_FAILED;
     }
     
@@ -66,13 +67,13 @@ static int blackrorator(int fd, void *pdata)
     hr = Toupcam_get_Negative(g_pstTouPcam->m_hcam, pibNegative);
     if (FAILED(hr))
     {
-        printf("toupcam get Negative failed!\n");
+        toupcam_dbg_f(LOG_ERROR, "toupcam get Negative failed!\n");
         goto _exit0;
     }
     Toupcam_put_Negative(g_pstTouPcam->m_hcam, (*pibNegative)^1);
     if (FAILED(hr))
     {
-        printf("toupcam put (%d) Negative failed!\n", (*pibNegative)^1);
+        toupcam_dbg_f(LOG_ERROR, "toupcam put (%d) Negative failed!\n", (*pibNegative)^1);
         goto _exit0;
     }
     *pibNegative = (*pibNegative)^1;
@@ -81,7 +82,7 @@ static int blackrorator(int fd, void *pdata)
     iRet = send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE, 0);
     if(iRet <= 0)
     {
-        printf("socket (%d) send failed!\n", fd);
+         toupcam_dbg_f(LOG_ERROR, "socket (%d) send failed!\n", fd);
         goto _exit0;
     }    
     return ERROR_SUCCESS;
@@ -98,7 +99,7 @@ static int snapshot(int fd, void *pdata)
 {
     if(fd < 0 || NULL == pdata)
     {
-        printf("%s: input param is invaild.\n", __func__);
+         toupcam_dbg_f(LOG_ERROR, "input param is invaild.\n");
         return ERROR_FAILED;
     }
 
@@ -122,13 +123,13 @@ static int snapshot(int fd, void *pdata)
 	
     if(!g_pstTouPcam->m_hcam)
     {
-        printf("%s: toupcam->m_hcam is invaild.\n", __func__);
+        toupcam_dbg_f(LOG_ERROR, "toupcam->m_hcam is invaild.\n");
         return ERROR_FAILED;
     }
     hr = Toupcam_Snap(g_pstTouPcam->m_hcam, 1); /* 抓拍当前2048x2044 */
     if (FAILED(hr))
     {
-        printf("picture arrived failly(%lld)!\n", hr);
+        toupcam_dbg_f(LOG_ERROR, "picture arrived failly(%d)!\n", hr);
         goto _exit0;
     }
     else
@@ -142,7 +143,7 @@ static int snapshot(int fd, void *pdata)
             pBuffer = (char *)malloc(TCP_BUFFERSIZE+TOUPCAM_COMMON_RESPON_HEADER_SIZE);
             if(NULL == pBuffer)
             {
-                perror("stToupcamRespon.pdata");
+                toupcam_dbg_f(LOG_ERROR, "stToupcamRespon.pdata:%s", strerror(errno));
                 pthread_mutex_lock(&g_PthreadMutexJpgDest);
                 goto _exit0;
             }
@@ -220,7 +221,7 @@ static int setbrightnesstype(int fd, void *pdata)
 {
     if(fd < 0 || NULL == pdata)
     {
-        printf("%s: input param is invaild.\n", __func__);
+        toupcam_dbg_f(LOG_ERROR, "input param is invaild.\n");
         return ERROR_FAILED;
     }
 
@@ -240,7 +241,7 @@ static int setbrightnesstype(int fd, void *pdata)
 
     if(!g_pstTouPcam->m_hcam)
     {
-        printf("%s: toupcam->m_hcam is invaild.\n", __func__);
+        toupcam_dbg_f(LOG_ERROR, "toupcam->m_hcam is invaild.\n");
         return ERROR_FAILED;
     }
 
@@ -253,7 +254,7 @@ static int setbrightnesstype(int fd, void *pdata)
             /* Toupcam_put_Brightness(g_pstTouPcam->m_hcam, g_pstTouPcam->stTexpo.bAutoExposure); */
             /* Toupcam_put_AutoExpoEnable(g_pstTouPcam->m_hcam, g_pstTouPcam->stTexpo.bAutoAGain); */
             /* Toupcam_get_AutoExpoEnable(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.bAutoAGain); */
-            printf("cur brightness mode:%s\n", g_pstTouPcam->stTexpo.bAutoAGain?"auto":"manu");
+            toupcam_dbg_f(LOG_INFO, "cur brightness mode:%s\n", g_pstTouPcam->stTexpo.bAutoAGain?"auto":"manu");
             if(g_pstTouPcam->stTexpo.bAutoAGain != pstToupcamReq->data.brightnesstype)
             {
                 goto _exit0;
@@ -262,14 +263,14 @@ static int setbrightnesstype(int fd, void *pdata)
     }
     else
     {
-        printf("cur brightness mode:%s\n", g_pstTouPcam->stTexpo.bAutoAGain?"auto":"manu");
+        toupcam_dbg_f(LOG_INFO, "cur brightness mode:%s\n", g_pstTouPcam->stTexpo.bAutoAGain?"auto":"manu");
     }
     stToupcamRespon.data.brightnesstype = g_pstTouPcam->stTexpo.bAutoAGain;
 
     hr = Toupcam_get_ExpoAGain(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.AGain);
     if (FAILED(hr))
     {
-        printf("get brightness failly(%lld)!\n", hr);
+        toupcam_dbg_f(LOG_ERROR, "get brightness failly(%d)!\n", hr);
         goto _exit0;
     }
 
@@ -294,7 +295,7 @@ static int setbrightness(int fd, void *pdata)
 {
     if(fd < 0 || NULL == pdata)
     {
-        printf("%s: input param is invaild.\n", __func__);
+        toupcam_dbg_f(LOG_ERROR, "input param is invaild.\n");
         return ERROR_FAILED;
     }
 
@@ -314,7 +315,7 @@ static int setbrightness(int fd, void *pdata)
 
     if(!g_pstTouPcam->m_hcam)
     {
-        printf("%s: toupcam->m_hcam is invaild.\n", __func__);
+        toupcam_dbg_f(LOG_ERROR, "toupcam->m_hcam is invaild.\n");
         return ERROR_FAILED;
     }
 
@@ -332,7 +333,7 @@ static int setbrightness(int fd, void *pdata)
 
     if(g_pstTouPcam->stTexpo.AnMin > usBrightness || g_pstTouPcam->stTexpo.AnMax < usBrightness)
     {
-        printf("more than the range of brightness.\n");
+        toupcam_dbg_f(LOG_ERROR, "more than the range of brightness.\n");
         goto _exit0;
     }
 
@@ -343,13 +344,13 @@ static int setbrightness(int fd, void *pdata)
         hr = Toupcam_put_ExpoAGain(g_pstTouPcam->m_hcam, g_pstTouPcam->stTexpo.AGain);
         if (FAILED(hr))
         {
-            printf("set brightness failly(%lld)!\n", hr);
+            toupcam_dbg_f(LOG_ERROR, "set brightness failly(%d)!\n", hr);
             goto _exit0;
         }
         hr = Toupcam_get_ExpoAGain(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.AGain);
         if (FAILED(hr))
         {
-            printf("get brightness failly(%lld)!\n", hr);
+            toupcam_dbg_f(LOG_ERROR, "get brightness failly(%d)!\n", hr);
             goto _exit0;
         }
 
@@ -358,11 +359,11 @@ static int setbrightness(int fd, void *pdata)
     }
     else
     {
-        printf("not set brightness,because of this is auto mode!!!\n");
+        toupcam_dbg_f(LOG_ERROR, "not set brightness,because of this is auto mode!!!\n");
         goto _exit0;
     }
     pthread_mutex_unlock(&g_pstTouPcam->stTexpo.mutex);
-    printf("brightness value: %d\n", g_pstTouPcam->stTexpo.AGain);
+    toupcam_dbg_f(LOG_ERROR, "brightness value: %d\n", g_pstTouPcam->stTexpo.AGain);
 
     send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE+2, 0);
 
@@ -380,7 +381,7 @@ static int setexpotype(int fd, void *pdata)
 {
     if(fd < 0 || NULL == pdata)
     {
-        printf("%s: input param is invaild.\n", __func__);
+        toupcam_dbg_f(LOG_ERROR, "input param is invaild.\n");
         return ERROR_FAILED;
     }
 
@@ -399,7 +400,7 @@ static int setexpotype(int fd, void *pdata)
 
     if(!g_pstTouPcam->m_hcam)
     {
-        printf("%s: toupcam->m_hcam is invaild.\n", __func__);
+        toupcam_dbg_f(LOG_ERROR, "toupcam->m_hcam is invaild.\n");
         return ERROR_FAILED;
     }
     
@@ -421,7 +422,7 @@ static int setexpotype(int fd, void *pdata)
         g_pstTouPcam->stTexpo.bAutoExposure = pstToupcamReq->data.brightnesstype;
         Toupcam_put_AutoExpoEnable(g_pstTouPcam->m_hcam, g_pstTouPcam->stTexpo.bAutoExposure);
         Toupcam_get_AutoExpoEnable(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.bAutoExposure);
-        printf("cur expo mode:%s\n", g_pstTouPcam->stTexpo.bAutoExposure?"auto":"manu");
+        toupcam_dbg_f(LOG_INFO, "cur expo mode:%s\n", g_pstTouPcam->stTexpo.bAutoExposure?"auto":"manu");
         if(g_pstTouPcam->stTexpo.bAutoExposure != pstToupcamReq->data.brightnesstype)
         {
             goto _exit0;
@@ -431,14 +432,14 @@ static int setexpotype(int fd, void *pdata)
         hr = Toupcam_get_AutoExpoTarget(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.AutoTarget);
         if (FAILED(hr))
         {
-            printf("get brightness failly(%lld)!\n", hr);;
+            toupcam_dbg_f(LOG_ERROR, "get brightness failly(%d)!\n", hr);
             goto _exit0;
         }
 
     }
     else
     {
-        printf("cur expo mode:%s\n", g_pstTouPcam->stTexpo.bAutoExposure?"auto":"manu");
+        toupcam_dbg_f(LOG_INFO, "cur expo mode:%s\n", g_pstTouPcam->stTexpo.bAutoExposure?"auto":"manu");
     }
     stToupcamRespon.data.expotype = g_pstTouPcam->stTexpo.bAutoExposure;
     
@@ -446,7 +447,7 @@ static int setexpotype(int fd, void *pdata)
     hr = Toupcam_get_ExpoAGain(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.AGain);
     if (FAILED(hr))
     {
-        printf("get expo AGain failly(%lld)!\n", hr);;
+        toupcam_dbg_f(LOG_ERROR, "get expo AGain failly(%d)!\n", hr);
         goto _exit0;
     }
 
@@ -469,7 +470,7 @@ static int setexpo(int fd, void *pdata)
 {
     if(fd < 0 || NULL == pdata)
     {
-        printf("%s: input param is invaild.\n", __func__);
+        toupcam_dbg_f(LOG_ERROR, "input param is invaild.\n");
         return ERROR_FAILED;
     }
 
@@ -489,7 +490,7 @@ static int setexpo(int fd, void *pdata)
 
     if(!g_pstTouPcam->m_hcam)
     {
-        printf("%s: toupcam->m_hcam is invaild.\n", __func__);
+        toupcam_dbg_f(LOG_ERROR, "toupcam->m_hcam is invaild.\n");
         return ERROR_FAILED;
     }
 
@@ -508,13 +509,13 @@ static int setexpo(int fd, void *pdata)
         hr = Toupcam_put_AutoExpoTarget(g_pstTouPcam->m_hcam, usExpo);
         if (FAILED(hr))
         {
-            printf("set brightness failly(%lld)!\n", hr);
+            toupcam_dbg_f(LOG_ERROR, "set brightness failly(%d)!\n", hr);
             goto _exit0;
         }
         hr = Toupcam_get_AutoExpoTarget(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.AutoTarget);
         if (FAILED(hr))
         {
-            printf("get brightness failly(%lld)!\n", hr);
+            toupcam_dbg_f(LOG_ERROR, "get brightness failly(%d)!\n", hr);
             g_pstTouPcam->stTexpo.AutoTarget = usExpo;
             goto _exit0;
         }
@@ -524,7 +525,7 @@ static int setexpo(int fd, void *pdata)
     }
     else
     {
-        printf("not set expo,because of this is manu mode!!!\n");
+        toupcam_dbg_f(LOG_ERROR, "not set expo,because of this is manu mode!!!\n");
         goto _exit0;
     }
 
@@ -532,7 +533,7 @@ static int setexpo(int fd, void *pdata)
     hr = Toupcam_get_ExpoAGain(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.AGain);
     if (FAILED(hr))
     {
-        printf("get expo AGain failly(%lld)!\n", hr);;
+        toupcam_dbg_f(LOG_ERROR, "get expo AGain failly(%d)!\n", hr);
         goto _exit0;
     }
 
@@ -556,7 +557,7 @@ static int setcontrasttype(int fd, void *pdata)
 {
     if(fd < 0 || NULL == pdata)
     {
-        printf("%s: input param is invaild.\n", __func__);
+        toupcam_dbg_f(LOG_ERROR, "input param is invaild.\n");
         return ERROR_FAILED;
     }
 
@@ -576,7 +577,7 @@ static int setcontrasttype(int fd, void *pdata)
 
     if(!g_pstTouPcam->m_hcam)
     {
-        printf("%s: toupcam->m_hcam is invaild.\n", __func__);
+        toupcam_dbg_f(LOG_ERROR, "toupcam->m_hcam is invaild.\n");
         return ERROR_FAILED;
     }
 
@@ -585,13 +586,13 @@ static int setcontrasttype(int fd, void *pdata)
     {
         g_pstTouPcam->stTcolor.bAutoColor = pstToupcamReq->data.contrasttype;
     }
-    printf("cur contrast mode:%s\n", g_pstTouPcam->stTcolor.bAutoColor?"auto":"manu");
+    toupcam_dbg_f(LOG_INFO, "cur contrast mode:%s\n", g_pstTouPcam->stTcolor.bAutoColor?"auto":"manu");
     stToupcamRespon.data.contrasttype = g_pstTouPcam->stTcolor.bAutoColor;
 
     hr = Toupcam_get_Contrast(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTcolor.Contrast);
     if (FAILED(hr))
     {
-        printf("get contrast failly(%lld)!\n", hr);
+        toupcam_dbg_f(LOG_ERROR, "get contrast failly(%d)!\n", hr);
         pthread_mutex_unlock(&g_pstTouPcam->stTcolor.mutex);
         goto _exit0;
     }
@@ -615,7 +616,7 @@ static int setcontrast(int fd, void *pdata)
 {
     if(fd < 0 || NULL == pdata)
     {
-        printf("%s: input param is invaild.\n", __func__);
+        toupcam_dbg_f(LOG_ERROR, "input param is invaild.\n");
         return ERROR_FAILED;
     }
 
@@ -635,7 +636,7 @@ static int setcontrast(int fd, void *pdata)
 
     if(!g_pstTouPcam->m_hcam)
     {
-        printf("%s: toupcam->m_hcam is invaild.\n", __func__);
+        toupcam_dbg_f(LOG_ERROR, "toupcam->m_hcam is invaild.\n");
         return ERROR_FAILED;
     }
 
@@ -654,14 +655,14 @@ static int setcontrast(int fd, void *pdata)
         hr = Toupcam_put_Contrast(g_pstTouPcam->m_hcam, iContrast);
         if (FAILED(hr))
         {
-            printf("set contrast failly(%lld)!\n", hr);
+            toupcam_dbg_f(LOG_ERROR, "set contrast failly(%d)!\n", hr);
             pthread_mutex_unlock(&g_pstTouPcam->stTcolor.mutex);
             goto _exit0;
         }
         hr = Toupcam_get_Contrast(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTcolor.Contrast);
         if (FAILED(hr))
         {
-            printf("get contrast failly(%lld)!\n", hr);
+            toupcam_dbg_f(LOG_ERROR, "get contrast failly(%d)!\n", hr);
             g_pstTouPcam->stTcolor.Contrast = iContrast;
             pthread_mutex_unlock(&g_pstTouPcam->stTcolor.mutex);
             goto _exit0;
@@ -672,7 +673,7 @@ static int setcontrast(int fd, void *pdata)
     }
     else
     {
-        printf("not set contrast,because of this is manu mode!!!\n");
+        toupcam_dbg_f(LOG_ERROR, "not set contrast,because of this is manu mode!!!\n");
         pthread_mutex_unlock(&g_pstTouPcam->stTcolor.mutex);
         goto _exit0;
     }
@@ -693,7 +694,7 @@ static int setzoneexpo(int fd, void *pdata)
 {
     if(fd < 0 || NULL == pdata)
     {
-        printf("%s: input param is invaild.\n", __func__);
+        toupcam_dbg_f(LOG_ERROR, "input param is invaild.\n");
         return ERROR_FAILED;
     }
 
@@ -713,7 +714,7 @@ static int setzoneexpo(int fd, void *pdata)
 
     if(!g_pstTouPcam->m_hcam)
     {
-        printf("%s: toupcam->m_hcam is invaild.\n", __func__);
+        toupcam_dbg_f(LOG_ERROR, "toupcam->m_hcam is invaild.\n");
         return ERROR_FAILED;
     }
 
@@ -737,20 +738,20 @@ static int setzoneexpo(int fd, void *pdata)
         hr = Toupcam_put_AEAuxRect(g_pstTouPcam->m_hcam, &stExpoRect);
         if (FAILED(hr))
         {
-            printf("set expo zone failly(%lld)!\n", hr);
+            toupcam_dbg_f(LOG_ERROR, "set expo zone failly(%d)!\n", hr);
             goto _exit0;
         }
         hr = Toupcam_get_AEAuxRect(g_pstTouPcam->m_hcam, &stExpoRect);
         if (FAILED(hr))
         {
-            printf("get expo zone failly(%lld)!\n", hr);
+            toupcam_dbg_f(LOG_ERROR, "get expo zone failly(%d)!\n", hr);
             goto _exit0;
         }
         stToupcamRespon.data.expozone = stExpoRect;
     }
     else
     {
-        printf("not set zone expo,because of this is manu mode!!!\n");
+        toupcam_dbg_f(LOG_ERROR, "not set zone expo,because of this is manu mode!!!\n");
         goto _exit0;
     }
 
@@ -771,7 +772,7 @@ static int sethistogramtype(int fd, void *pdata)
 {
     if(fd < 0 || NULL == pdata)
     {
-        printf("%s: input param is invaild.\n", __func__);
+        toupcam_dbg_f(LOG_ERROR, "input param is invaild.\n");
         return ERROR_FAILED;
     }
 
@@ -791,7 +792,7 @@ static int sethistogramtype(int fd, void *pdata)
 
     if(!g_pstTouPcam->m_hcam)
     {
-        printf("%s: toupcam->m_hcam is invaild.\n", __func__);
+        toupcam_dbg_f(LOG_ERROR, "toupcam->m_hcam is invaild.\n");
         return ERROR_FAILED;
     }
 
@@ -810,7 +811,7 @@ static int sethistogramtype(int fd, void *pdata)
             goto _exit0;
         }
         g_pstTouPcam->stHistoram.bAutoHis = pstToupcamReq->data.historamtype;
-        printf("cur contrast mode:%s\n", g_pstTouPcam->stHistoram.bAutoHis?"auto":"manu");
+        toupcam_dbg_f(LOG_INFO, "cur contrast mode:%s\n", g_pstTouPcam->stHistoram.bAutoHis?"auto":"manu");
     }
     else if(1 == g_pstTouPcam->stHistoram.bAutoHis && 
         g_pstTouPcam->stHistoram.bAutoHis !=  pstToupcamReq->data.historamtype)
@@ -831,7 +832,7 @@ static int sethistogramtype(int fd, void *pdata)
     }
     else
     {
-        printf("cur histogram mode:%s\n", g_pstTouPcam->stHistoram.bAutoHis?"auto":"manu");
+        toupcam_dbg_f(LOG_INFO, "cur histogram mode:%s\n", g_pstTouPcam->stHistoram.bAutoHis?"auto":"manu");
     }
     pthread_mutex_unlock(&g_pstTouPcam->stHistoram.mutex);
     
@@ -854,7 +855,7 @@ static int sethistogram(int fd, void *pdata)
 {
     if(fd < 0 || NULL == pdata)
     {
-        printf("%s: input param is invaild.\n", __func__);
+        toupcam_dbg_f(LOG_ERROR, "input param is invaild.\n");
         return ERROR_FAILED;
     }
 
@@ -875,7 +876,7 @@ static int sethistogram(int fd, void *pdata)
 
     if(!g_pstTouPcam->m_hcam)
     {
-        printf("%s: toupcam->m_hcam is invaild.\n", __func__);
+        toupcam_dbg_f(LOG_ERROR, "toupcam->m_hcam is invaild.\n");
         return ERROR_FAILED;
     }
 
@@ -921,7 +922,7 @@ static int sethistogram(int fd, void *pdata)
         }    
         if(4 == i)
         {
-            printf("no need to set it.\n");
+            toupcam_dbg_f(LOG_ERROR, "no need to set it.\n");
             pthread_mutex_unlock(&g_pstTouPcam->stHistoram.mutex);
             goto _exit0;
         }
@@ -929,7 +930,7 @@ static int sethistogram(int fd, void *pdata)
     else
     {
         pthread_mutex_unlock(&g_pstTouPcam->stHistoram.mutex);
-        printf("not set histogram,because of this is auto mode!!!\n");
+        toupcam_dbg_f(LOG_ERROR, "not set histogram,because of this is auto mode!!!\n");
         goto _exit0;
     }
     pthread_mutex_unlock(&g_pstTouPcam->stHistoram.mutex);
@@ -949,7 +950,7 @@ static int syncserverdata(int fd, void *pdata)
 {
     if(fd < 0 || NULL == pdata)
     {
-        printf("%s: input param is invaild.\n", __func__);
+        toupcam_dbg_f(LOG_ERROR, "input param is invaild.\n");
         return ERROR_FAILED;
     }
 
@@ -970,7 +971,7 @@ static int syncserverdata(int fd, void *pdata)
 
     if(!g_pstTouPcam->m_hcam)
     {
-        printf("%s: toupcam->m_hcam is invaild.\n", __func__);
+        toupcam_dbg_f(LOG_ERROR, "toupcam->m_hcam is invaild.\n");
         return ERROR_FAILED;
     }
 
@@ -1003,7 +1004,7 @@ static int resetserver(int fd, void *pdata)
 {
     if(fd < 0 || NULL == pdata)
     {
-        printf("%s: input param is invaild.\n", __func__);
+        toupcam_dbg_f(LOG_ERROR, "input param is invaild.\n");
         return ERROR_FAILED;
     }
 
@@ -1017,7 +1018,7 @@ static int resetserver(int fd, void *pdata)
 
     if(TCP_REQUEST != pstToupcamReq->com.type)
     {
-        printf("%s: please send the correct request type.\n", __func__);
+        toupcam_dbg_f(LOG_ERROR, "please send the correct request type.\n");
         hr = ERROR_FAILED;
         goto _exit0;
     }
@@ -1025,7 +1026,7 @@ static int resetserver(int fd, void *pdata)
     hr = raise(SIGINT);
     if(ERROR_SUCCESS != hr)
     {
-        printf("%s:%s", __func__, strerror(errno));
+        toupcam_dbg_f(LOG_ERROR, "%s", strerror(errno));
         hr = ERROR_FAILED;
         goto _exit0;
     }
@@ -1064,7 +1065,7 @@ int common_toupcam_cmd(int fd, void *pdata, unsigned short usSize)
 {
     if(fd < 0 || NULL == pdata)
     {
-        printf("%s: input is invaild.\n", __func__);
+        toupcam_dbg_f(LOG_ERROR, "input is invaild.\n");
         return ERROR_FAILED;
     }
     TOUPCAM_COMMON_REQUES_S *pstToupcamReq = (TOUPCAM_COMMON_REQUES_S *)pdata;

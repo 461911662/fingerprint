@@ -16,11 +16,11 @@
 typedef struct Errorinfo
 {
     unsigned int errorid;
-    char *info;
-    char *definfo;
+    const char *info;
+    const char *definfo;
 }ERRORINFO_S;
 
-extern char *toupcamerrinfo(unsigned int uiCallbackContext);
+extern const char *toupcamerrinfo(unsigned int uiCallbackContext);
 
 int debug(char *, ...);
 int fail(char *, ...);

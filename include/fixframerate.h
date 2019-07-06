@@ -13,6 +13,9 @@ public:
         int getQueueNum();
         int getFixnum();
         //int getQueueFrameFormat(int &h, int &w, int &b);
+	int tryholdlock();
+	void holdlock();
+	void releaselock();
         char *PopQueue();
         void PushQueue(char *byte);
 private:

@@ -25,7 +25,7 @@ HASHTABLE_S* createHash()
     return pstHashTable;
 }
 
-DIRECTORY_S* createnode(char *key, char*val)
+DIRECTORY_S* createnode(const char *key, const char*val)
 {
     if(NULL == key || NULL == val)
     {

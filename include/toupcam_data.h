@@ -16,7 +16,7 @@ typedef struct HashTable
 }HASHTABLE_S;
 
 HASHTABLE_S* createHash();       /* 创建 */
-DIRECTORY_S* createnode(char *key, char*val);   /* 创建node */
+DIRECTORY_S* createnode(const char *key, const char*val);   /* 创建node */
 void destorynode(DIRECTORY_S *pnode);           /* 删除node */
 DIRECTORY_S* findnnode(HASHTABLE_S *ptable, DIRECTORY_S *pnode);        /* 查 */
 void findbykey();        /* 查1 */  
