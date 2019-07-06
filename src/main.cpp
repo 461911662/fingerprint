@@ -312,7 +312,7 @@ void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx)
             {                
                 /* After we get the image data, we can do anything for the data we want to do */
                 /* toupcam_log_f(LOG_INFO, "pull image ok, total = %u, resolution = %u x %u\n", ++g_total, info.width, info.height); */
-                /*
+#ifdef DEBUG_RGB8_DUMP
                 FILE *fp = fopen("mRGB.dat", "ab");
                 if(NULL == fp)
                 {
@@ -320,10 +320,15 @@ void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx)
                 }
                 else
                 {
+#ifndef FIX_FRAMERATE_QUEUE
                     fwrite(g_pImageData, g_pstTouPcam->inHeight*g_pstTouPcam->inWidth*3, 1, fp);
+#else
+                    fwrite(g_pstDataQueue->acdata[index], g_pstTouPcam->inHeight*g_pstTouPcam->inWidth*3, 1, fp);
+#endif
                     fclose(fp);
                 }
-                */
+#endif
+
 #ifndef FIX_FRAMERATE_QUEUE
                 pstFixFrameRate->PushQueue((char *)g_pImageData);
             }

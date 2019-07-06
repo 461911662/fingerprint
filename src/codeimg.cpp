@@ -1359,7 +1359,7 @@ MPP_RET mpp_encode(MPP_ENC_DATA_S *p, unsigned char *yuv, unsigned long len)
             memcpy(pch264spspps, ptr, len0);
             if (p->fp_output)
             {
-                fwrite(ptr, 1, len0, p->fp_output);
+                //fwrite(ptr, 1, len0, p->fp_output);
                 //fclose(p->fp_output);
                 //printf("write finished.\n");
             }
@@ -1429,7 +1429,7 @@ MPP_RET mpp_encode(MPP_ENC_DATA_S *p, unsigned char *yuv, unsigned long len)
         }
 
         if (p->fp_output)
-            fwrite(ptr, 1, len, p->fp_output);
+            //fwrite(ptr, 1, len, p->fp_output);
         mpp_packet_deinit(&packet);
 
         //printf("encoded frame %d size %d\n", p->frame_count, len);

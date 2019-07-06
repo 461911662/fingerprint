@@ -17,6 +17,8 @@
 
 #define MINIMUM_RESOLUTION
 
+#undef DEBUG_RGB8_DUMP
+
 #define FIX_480P
 
 #if defined(FIX_480P)
