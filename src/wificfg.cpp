@@ -161,7 +161,7 @@ int setdisconnecttcp(int fd)
     stToupcamRequest.com.subcmd = CMD_DISCONNECTTCP;
     stToupcamRequest.com.size[0] = sizeof(stToupcamRequest.com.type) + sizeof(stToupcamRequest.com.cmd)
                                 + sizeof(stToupcamRequest.com.subcmd);
-    iRet = send(fd, &stToupcamRequest, TOUPCAM_COMMON_RESPON_HEADER_SIZE-1, 0);
+    iRet = send(fd, &stToupcamRequest, TOUPCAM_COMMON_RESPON_HEADER_SIZE, 0);
     if(iRet <= 0)
     {
         toupcam_dbg_f(LOG_ERROR, "socket (%d) send failed!\n", fd);
