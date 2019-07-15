@@ -642,11 +642,11 @@ static int setcontrast(int fd, void *pdata)
 
     if(!iEndianness)
     {
-        iContrast = (short)BIGLITTLESWAP32(pstToupcamReq->data.contrast);
+        iContrast = BIGLITTLESWAP32(pstToupcamReq->data.contrast);
     }
     else
     {
-        iContrast = (short)pstToupcamReq->data.contrast;
+        iContrast = pstToupcamReq->data.contrast;
     }    
     
     pthread_mutex_lock(&g_pstTouPcam->stTcolor.mutex);
