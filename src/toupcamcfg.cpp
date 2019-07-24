@@ -647,8 +647,10 @@ static int setcontrast(int fd, void *pdata)
     else
     {
         iContrast = pstToupcamReq->data.contrast;
-    }    
-    
+    }
+
+    iContrast -= 100;
+
     pthread_mutex_lock(&g_pstTouPcam->stTcolor.mutex);
     if(!g_pstTouPcam->stTcolor.bAutoColor)
     {
@@ -981,7 +983,7 @@ static int syncserverdata(int fd, void *pdata)
     stToupcamRespon.data.totaldata.expotype = g_pstTouPcam->stTexpo.bAutoExposure;
     stToupcamRespon.data.totaldata.expo = g_pstTouPcam->stTexpo.AutoTarget;
     stToupcamRespon.data.totaldata.contrasttype = g_pstTouPcam->stTcolor.bAutoColor;
-    stToupcamRespon.data.totaldata.contrast = g_pstTouPcam->stTcolor.Contrast;
+    stToupcamRespon.data.totaldata.contrast = g_pstTouPcam->stTcolor.Contrast + 100;
     stToupcamRespon.data.totaldata.historamtype = g_pstTouPcam->stHistoram.bAutoHis;
     for(i=0; i<4; i++)
     {
