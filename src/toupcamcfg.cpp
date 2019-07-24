@@ -540,7 +540,7 @@ static int setexpo(int fd, void *pdata)
     pthread_mutex_unlock(&g_pstTouPcam->stTexpo.mutex);
 
     send(fd, &stToupcamRespon, TOUPCAM_COMMON_RESPON_HEADER_SIZE+2, 0);
-    export_syncserverdata(fd);
+    /* export_syncserverdata(fd); */
 
     return ERROR_SUCCESS;    
 
