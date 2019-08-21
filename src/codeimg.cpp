@@ -1463,7 +1463,11 @@ void encode2hardware(unsigned char *g_pImageData)
 
 #if 1
     int width = nWidth, height = nHeight;
+#if(BIT_DEPTH == BIT_DEPTH8) 
     enum AVPixelFormat src_pix_fmt = AV_PIX_FMT_GRAY8, dst_pix_fmt = AV_PIX_FMT_YUV420P;
+#elif(BIT_DEPTH == BIT_DEPTH24)
+    enum AVPixelFormat src_pix_fmt = AV_PIX_FMT_RGB24, dst_pix_fmt = AV_PIX_FMT_YUV420P;
+#endif
 
     AVFrame *pFrameYUV = (AVFrame *)av_frame_alloc();
     uint8_t *out_buffer = new uint8_t[avpicture_get_size(dst_pix_fmt, width, height)];

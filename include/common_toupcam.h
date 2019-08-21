@@ -17,7 +17,7 @@
 
 #define MINIMUM_RESOLUTION
 
-#undef DEBUG_RGB8_DUMP
+#undef DEBUG_RGB_DUMP
 
 #define FIX_480P
 
@@ -34,6 +34,7 @@
 
 #define BIT_DEPTH BIT_DEPTH8
 #define BIT_DEPTH8 8
+#define BIT_DEPTH24 24
 #define FIX_FRAMERATE 24
 #undef FIX_FRAMERATE_QUEUE
 
