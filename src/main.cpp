@@ -93,8 +93,12 @@ unsigned int g_uiProcess_num = 0;
 
 extern void Destory_sock(void);
 extern MPP_RET mpp_ctx_deinit(MPP_ENC_DATA_S **data);
-static void handle_udp_distribute1();
-static void handle_udp_distribute2();
+
+static void handle_udp_data1();
+static void handle_udp_data2();
+static void save_udp_data1();
+static void save_udp_data2();
+
 
 union { 
     char c[4]; 
@@ -291,52 +295,9 @@ void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx)
     {
         case TOUPCAM_EVENT_IMAGE:
 #ifdef FIX_FRAMERATE_QUEUE
-            index = InQueue(g_pstDataQueue);
-            hr = Toupcam_PullImageV2(g_hcam, g_pstDataQueue->acdata[index], BIT_DEPTH, &info);
+            save_udp_data1();
 #else
-    	    //if(0 != pstFixFrameRate->tryholdlock())
-    	    //{
-    		    //printf("try lock failed\n");
-    		    //break;
-    	    //}
-    	    pstFixFrameRate->holdlock();
-            //memset(g_pImageData, 0, sizeof(g_pstTouPcam->m_header.biSizeImage));
-            hr = Toupcam_PullImageV2(g_hcam, g_pImageData, BIT_DEPTH, &info);
-#endif
-
-            /* 算法处理 */
-#ifdef PICTURE_ARITHMETIC
-            hr += image_arithmetic_handle_rgb((unsigned char *)g_pImageData,  g_pstTouPcam->inHeight, g_pstTouPcam->inWidth, 24);
-#endif
-            if (FAILED(hr))
-                toupcam_log_f(LOG_INFO, "failed to pull image, hr = %08x\n", hr);
-            else
-            {                
-                /* After we get the image data, we can do anything for the data we want to do */
-                /* toupcam_log_f(LOG_INFO, "pull image ok, total = %u, resolution = %u x %u\n", ++g_total, info.width, info.height); */
-#ifdef DEBUG_RGB_DUMP
-                FILE *fp = fopen("mRGB.dat", "ab");
-                if(NULL == fp)
-                {
-                    toupcam_log_f(LOG_INFO, "mGRB.dat:%s", strerror(errno));
-                }
-                else
-                {
-#ifndef FIX_FRAMERATE_QUEUE
-                    fwrite(g_pImageData, g_pstTouPcam->inHeight*g_pstTouPcam->inWidth*(BIT_DEPTH/8), 1, fp);
-#else
-                    fwrite(g_pstDataQueue->acdata[index], g_pstTouPcam->inHeight*g_pstTouPcam->inWidth*(BIT_DEPTH/8), 1, fp);
-#endif
-                    fclose(fp);
-                }
-#endif
-
-#ifndef FIX_FRAMERATE_QUEUE
-                pstFixFrameRate->PushQueue((char *)g_pImageData);
-            }
-	        pstFixFrameRate->releaselock();
-#else
-            }
+            save_udp_data2();
 #endif
             break;
         case TOUPCAM_EVENT_STILLIMAGE:
@@ -412,6 +373,86 @@ void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx)
             toupcam_log_f(LOG_INFO, "unknown event: %d\n", nEvent);
             break;
     }
+}
+
+static void save_udp_data1()
+{
+    if(NULL == g_pstDataQueue)
+    {
+        toupcam_log_f(LOG_ERROR, "g_pstDataQueue is nullptr.");
+        return;
+    }
+
+    HRESULT hr;
+    int index = 0;
+    ToupcamFrameInfoV2 info = { 0 };
+
+    index = InQueue(g_pstDataQueue);
+    hr = Toupcam_PullImageV2(g_hcam, g_pstDataQueue->acdata[index], BIT_DEPTH, &info);
+    /* 算法处理 */
+#ifdef PICTURE_ARITHMETIC
+    hr += image_arithmetic_handle_rgb((unsigned char *)g_pstDataQueue->acdata[index],  g_pstTouPcam->inHeight, g_pstTouPcam->inWidth, 24);
+#endif
+    if (FAILED(hr))
+        toupcam_log_f(LOG_INFO, "failed to pull image, hr = %08x\n", hr);
+    else
+    {
+        /* After we get the image data, we can do anything for the data we want to do */
+        /* toupcam_log_f(LOG_INFO, "pull image ok, total = %u, resolution = %u x %u\n", ++g_total, info.width, info.height); */
+#ifdef DEBUG_RGB_DUMP
+        FILE *fp = fopen("mRGB.dat", "ab");
+        if(NULL == fp)
+        {
+            toupcam_log_f(LOG_INFO, "mGRB.dat:%s", strerror(errno));
+        }
+        else
+        {
+            fwrite(g_pstDataQueue->acdata[index], g_pstTouPcam->inHeight*g_pstTouPcam->inWidth*(BIT_DEPTH/8), 1, fp);
+            fclose(fp);
+        }
+#endif
+    }
+}
+
+static void save_udp_data2()
+{
+    if(NULL == g_pImageData)
+    {
+        toupcam_log_f(LOG_ERROR, "g_pImageData is nullptr.");
+        return ;
+    }
+
+    HRESULT hr;
+    ToupcamFrameInfoV2 info = { 0 };
+
+    pstFixFrameRate->holdlock();
+    //memset(g_pImageData, 0, sizeof(g_pstTouPcam->m_header.biSizeImage));
+    hr = Toupcam_PullImageV2(g_hcam, g_pImageData, BIT_DEPTH, &info);
+    /* 算法处理 */
+#ifdef PICTURE_ARITHMETIC
+    hr += image_arithmetic_handle_rgb((unsigned char *)g_pImageData,  g_pstTouPcam->inHeight, g_pstTouPcam->inWidth, 24);
+#endif
+    if (FAILED(hr))
+        toupcam_log_f(LOG_INFO, "failed to pull image, hr = %08x\n", hr);
+    else
+    {
+        /* After we get the image data, we can do anything for the data we want to do */
+        /* toupcam_log_f(LOG_INFO, "pull image ok, total = %u, resolution = %u x %u\n", ++g_total, info.width, info.height); */
+#ifdef DEBUG_RGB_DUMP
+        FILE *fp = fopen("mRGB.dat", "ab");
+        if(NULL == fp)
+        {
+            toupcam_log_f(LOG_INFO, "mGRB.dat:%s", strerror(errno));
+        }
+        else
+        {
+            fwrite(g_pImageData, g_pstTouPcam->inHeight*g_pstTouPcam->inWidth*(BIT_DEPTH/8), 1, fp);
+            fclose(fp);
+        }
+#endif
+        pstFixFrameRate->PushQueue((char *)g_pImageData);
+    }
+    pstFixFrameRate->releaselock();
 }
 
 static void pHistramCallback(const float aHistY[256], const float aHistR[256], const float aHistG[256], const float aHistB[256], void* pCtx)
@@ -907,14 +948,14 @@ void *pthread_udp_distribute(void *pdata)
     }
 
 #ifdef FIX_FRAMERATE_QUEUE
-    handle_udp_distribute1();
+    handle_udp_data1();
 #else
-    handle_udp_distribute2();
+    handle_udp_data2();
 #endif
     
 }
 
-static void handle_udp_distribute1()
+static void handle_udp_data1()
 {
     int index;
     while(1)
@@ -954,7 +995,7 @@ static void handle_udp_distribute1()
     }
 }
 
-static void handle_udp_distribute2()
+static void handle_udp_data2()
 {
     while(1)
     {
