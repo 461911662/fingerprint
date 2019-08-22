@@ -93,6 +93,8 @@ unsigned int g_uiProcess_num = 0;
 
 extern void Destory_sock(void);
 extern MPP_RET mpp_ctx_deinit(MPP_ENC_DATA_S **data);
+static void handle_udp_distribute1();
+static void handle_udp_distribute2();
 
 union { 
     char c[4]; 
@@ -892,7 +894,6 @@ void *pthread_health_monitor(void *pdata)
 void *pthread_udp_distribute(void *pdata)
 {
     cpu_set_t mask;
-    int index;
     int processid = distribute_process();
     if(-1 != processid)
     {
@@ -905,51 +906,39 @@ void *pthread_udp_distribute(void *pdata)
         toupcam_log_f(LOG_INFO, "thread id(%d) use process(%d)", (int)pthread_self(), processid);
     }
 
+#ifdef FIX_FRAMERATE_QUEUE
+    handle_udp_distribute1();
+#else
+    handle_udp_distribute2();
+#endif
+    
+}
+
+static void handle_udp_distribute1()
+{
+    int index;
     while(1)
     {
-#ifndef FIX_FRAMERATE_QUEUE
-        if(NULL == pstFixFrameRate || 0 == pstFixFrameRate->getQueueNum())
-#else
         if(NULL == g_pstDataQueue || 0 == g_pstDataQueue->iCnt)
-#endif
         {
             sleep(1);
             continue;
         }
 
-#ifndef FIX_FRAMERATE_QUEUE        
-        if(pstFixFrameRate->getFixnum() < frame_num)
-        {
-#else
         if(FIX_FRAMERATE < frame_num)
         {
             (void)DeQueue(g_pstDataQueue);
-#endif
             usleep(100000);
             continue;
         }
 
-#ifndef FIX_FRAMERATE_QUEUE        
-    	if(0 != pstFixFrameRate->tryholdlock())
-    	{
-    	    //printf("try lock failed\n");
-    	    continue;
-    	}
-        unsigned char *ndata = (unsigned char *)pstFixFrameRate->PopQueue();
-#else
         index = DeQueue(g_pstDataQueue);
         unsigned char *ndata = (unsigned char *)g_pstDataQueue->acdata[index];
-#endif
-
         if(NULL == ndata)
         {
-#ifndef FIX_FRAMERATE_QUEUE
-	        pstFixFrameRate->releaselock();
-#endif
             continue;
         }
-            
-        
+
 #ifdef SOFT_ENCODE_H264
         encode_yuv((unsigned char *)ndata);
 #else
@@ -961,13 +950,51 @@ void *pthread_udp_distribute(void *pdata)
         encode2hardware((unsigned char *)ndata);
 #endif
         frame_num++;
-
-#ifndef FIX_FRAMERATE_QUEUE
-	    pstFixFrameRate->releaselock();
-#endif
         usleep(10000);
     }
+}
 
+static void handle_udp_distribute2()
+{
+    while(1)
+    {
+        if(NULL == pstFixFrameRate || 0 == pstFixFrameRate->getQueueNum())
+        {
+            sleep(1);
+            continue;
+        }
+        if(pstFixFrameRate->getFixnum() < frame_num)
+        {
+            usleep(100000);
+            continue;
+        }
+
+        if(0 != pstFixFrameRate->tryholdlock())
+        {
+            //printf("try lock failed\n");
+            continue;
+        }
+        unsigned char *ndata = (unsigned char *)pstFixFrameRate->PopQueue();
+        if(NULL == ndata)
+        {
+            pstFixFrameRate->releaselock();
+            continue;
+        }
+#ifdef SOFT_ENCODE_H264
+        encode_yuv((unsigned char *)ndata);
+#else
+        if(g_pstmpp_enc_data && g_pstmpp_enc_data->frame_count >= MPP_FRAME_MAXNUM)
+        {
+            mpp_ctx_deinit(&g_pstmpp_enc_data);
+            init_mpp();
+        }
+        encode2hardware((unsigned char *)ndata);
+#endif
+
+        frame_num++;
+        pstFixFrameRate->releaselock();
+        usleep(10000);
+    }
 }
 
 void Destory_sock(void)
