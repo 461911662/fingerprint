@@ -36,7 +36,7 @@
 #define BIT_DEPTH8 8
 #define BIT_DEPTH24 24
 #define FIX_FRAMERATE 24
-#undef FIX_FRAMERATE_QUEUE
+#define FIX_FRAMERATE_QUEUE
 
 #define TOUPCAM_POWER_AC_60HZ       0
 #define TOUPCAM_POWER_AC_50HZ       1
@@ -249,7 +249,7 @@ typedef struct Toupcam
 	int iSnapSize;
 	HToupCam m_hcam; /* 当前Toupcam的有效句柄 */
 	void*	m_pImageData; /* 当前Toupcam的数据Buffer */
-    void*   m_PStaticImageData;  /* 快速抓拍使用的数据Buffer */
+    void*   m_pStaticImageData;  /* 快速抓拍使用的数据Buffer */
 	BITMAPINFOHEADER m_header;
     int bNegative;                      /* 图像是否反转 */
     int iFrameRate;                     /* 相机的帧率 */

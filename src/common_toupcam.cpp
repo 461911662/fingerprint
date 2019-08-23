@@ -277,7 +277,7 @@ unsigned int getReloadercfg(void *pvoid, int method)
     g_pstTouPcam->iSnapSize = pTmpToupcam->iSnapSize;
     /* 初始化相机数据 */
     g_pstTouPcam->m_pImageData = NULL;
-    g_pstTouPcam->m_PStaticImageData = NULL;
+    g_pstTouPcam->m_pStaticImageData = NULL;
     /* 初始化相机设置 */
     g_pstTouPcam->bNegative = pTmpToupcam->bNegative;
     g_pstTouPcam->iFrameRate = pTmpToupcam->iFrameRate;
@@ -493,7 +493,7 @@ unsigned int StartDevice(void *pvoid)
             return ERROR_FAILED;
         }
     }
-    pToupcam->m_PStaticImageData = g_pStaticImageData;
+    pToupcam->m_pStaticImageData = g_pStaticImageData;
 #ifdef SOFT_ENCODE_H264
     av_register_all();
 
@@ -1479,6 +1479,9 @@ static unsigned int Set_ToupcamOrientation()
         toupcam_log_f(LOG_ERROR, "set roi (%dx%d) failed at(150, 250).\n", ROI_INWIDTH, ROI_INHEIGHT);
         return ERROR_FAILED;
     }
+    /* ROI后，更新帧数据大小 */
+    g_pstTouPcam->iSnapSize = TDIBWIDTHBYTES(g_pstTouPcam->inWidth * BIT_DEPTH) * g_pstTouPcam->inWidth;
+    g_pstTouPcam->m_header.biSizeImage = TDIBWIDTHBYTES(g_pstTouPcam->inWidth * BIT_DEPTH) * g_pstTouPcam->inHeight;
 #endif
 
     return ERROR_SUCCESS;

@@ -91,6 +91,18 @@ sem_t g_SemaphoreHistoram;
 unsigned int *g_puiProcess_task = NULL;
 unsigned int g_uiProcess_num = 0;
 
+/*handFingerPrintData
+*函数说明：通过算法处理帧数据流InData,然后将处理后的数据返回;
+*参数:
+*  unsigned char *InData: 传入的帧数据流
+*     unsigned int Width: 帧数据流的宽度
+*    unsigned int Height: 帧数据流的长度
+*      unsigned char bit: 帧数据流的一个像素的bit位
+*返回值:
+*        unsigned char *: 返回处理后的数据流
+*/
+extern unsigned char *handFingerPrintData(unsigned char *InData, unsigned int Width, unsigned int Height, unsigned char bit);
+
 extern void Destory_sock(void);
 extern MPP_RET mpp_ctx_deinit(MPP_ENC_DATA_S **data);
 
@@ -302,8 +314,8 @@ void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx)
             break;
         case TOUPCAM_EVENT_STILLIMAGE:
             toupcam_log_f(LOG_INFO, "toupcam event TOUPCAM_EVENT_STILLIMAGE(%d).\n", nEvent);
-            memset(g_pStaticImageData, 0, sizeof(g_pstTouPcam->m_header.biSizeImage));
-            hr = Toupcam_PullStillImageV2(g_hcam, NULL, 24, &info);
+            memset(g_pStaticImageData, 0, sizeof(g_pstTouPcam->iSnapSize));
+            hr = Toupcam_PullStillImageV2(g_hcam, NULL, BIT_DEPTH, &info);
             if (FAILED(hr))
                 toupcam_log_f(LOG_INFO, "failed to pull image, hr = %08x\n", hr);
             else
@@ -311,7 +323,7 @@ void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx)
                 /* After we get the image data, we can do anything for the data we want to do */
                 /* toupcam_log_f(LOG_INFO, "pull static image ok, total = %u, resolution = %u x %u\n", ++g_total, info.width, info.height); */
                 
-                hr = Toupcam_PullStillImage(g_hcam, g_pStaticImageData, 24, NULL, NULL);
+                hr = Toupcam_PullStillImage(g_hcam, g_pStaticImageData, BIT_DEPTH, NULL, NULL);
                 if (SUCCEEDED(hr))
                 {
                     toupcam_log_f(LOG_INFO, "encode.\n");
@@ -385,11 +397,21 @@ static void save_udp_data1()
 
     HRESULT hr;
     int index = 0;
+    int iResult = 0;
     ToupcamFrameInfoV2 info = { 0 };
 
+    //pthread_mutex_trylock(&g_pstDataQueue->lock);
+    iResult = sem_trywait(&g_pstDataQueue->semaphore);
+    if(0 != iResult)
+    {
+        return;
+    }
+    
     index = InQueue(g_pstDataQueue);
     hr = Toupcam_PullImageV2(g_hcam, g_pstDataQueue->acdata[index], BIT_DEPTH, &info);
     /* 算法处理 */
+    /* 3d 去噪 */
+    Handle3dNoise(g_pstDataQueue, index, g_pstTouPcam->m_header.biSizeImage);
 #ifdef PICTURE_ARITHMETIC
     hr += image_arithmetic_handle_rgb((unsigned char *)g_pstDataQueue->acdata[index],  g_pstTouPcam->inHeight, g_pstTouPcam->inWidth, 24);
 #endif
@@ -412,6 +434,7 @@ static void save_udp_data1()
         }
 #endif
     }
+    //pthread_mutex_unlock(&g_pstDataQueue->lock);
 }
 
 static void save_udp_data2()
@@ -958,6 +981,7 @@ void *pthread_udp_distribute(void *pdata)
 static void handle_udp_data1()
 {
     int index;
+    int iResult = 0;
     while(1)
     {
         if(NULL == g_pstDataQueue || 0 == g_pstDataQueue->iCnt)
@@ -974,6 +998,11 @@ static void handle_udp_data1()
         }
 
         index = DeQueue(g_pstDataQueue);
+        if(-1 == index)
+        {
+            continue;
+        }
+        
         unsigned char *ndata = (unsigned char *)g_pstDataQueue->acdata[index];
         if(NULL == ndata)
         {
@@ -990,8 +1019,10 @@ static void handle_udp_data1()
         }
         encode2hardware((unsigned char *)ndata);
 #endif
+        //pthread_mutex_unlock(&g_pstDataQueue->lock);
         frame_num++;
-        usleep(10000);
+        //usleep(10000);
+        sem_post(&g_pstDataQueue->semaphore);
     }
 }
 
@@ -1156,6 +1187,12 @@ int init_cpu(void)
 void semaphore_inits(void)
 {
     sem_init(&g_SemaphoreHistoram, 0, 1);
+    return;
+}
+
+void semaphore_destorys(void)
+{
+    sem_destroy(&g_SemaphoreHistoram);
     return;
 }
 
@@ -1404,6 +1441,7 @@ int main(int, char**)
     }
 
     pthread_mutex_destroys();
+    semaphore_destorys();
 
 #ifndef SOFT_ENCODE_H264
     mpp_ctx_deinit(&g_pstmpp_enc_data);

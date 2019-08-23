@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <semaphore.h>
 #include "../include/toupcam_log.h"
 #include "../include/toupcamqueue.h"
 
@@ -11,7 +12,7 @@ TOUPCAM_DATA_QUEUE_S *CreateQueue(int width, int height, int bit)
     if(width <= 0 || height <= 0 || bit <= 0)
     {
         printf("invaild input parameter\n");
-	return NULL;	
+	    return NULL;	
     }
     int iSize = width*height*bit/8;
     int i;
@@ -20,9 +21,11 @@ TOUPCAM_DATA_QUEUE_S *CreateQueue(int width, int height, int bit)
     {
         pstDataQueue->acdata[i] = (char *)malloc(iSize);
     }
-    pstDataQueue->head = -1;
-    pstDataQueue->tail = -1;
+    pstDataQueue->head = 0;
+    pstDataQueue->tail = 0;
     pstDataQueue->iCnt = 0;
+    pthread_mutex_init(&pstDataQueue->lock, NULL);
+    sem_init(&pstDataQueue->semaphore, 0, 1);
     return pstDataQueue;
 }
 
@@ -31,9 +34,15 @@ int InQueue(TOUPCAM_DATA_QUEUE_S *pstQueue)
     if(NULL == pstQueue)
     {
         printf("invaild input parameter\n");
-	return ERROR_FAILED;
+	    return ERROR_FAILED;
     }
 
+    if(QUEUE_SIZE == (QUEUE_SIZE - pstQueue->tail + pstQueue->head)-1 && pstQueue->head != pstQueue->tail)
+    {
+        return pstQueue->tail;
+    }
+
+    
     if(QUEUE_SIZE == pstQueue->tail + 1)
     {
         pstQueue->tail = 0;
@@ -64,7 +73,12 @@ int DeQueue(TOUPCAM_DATA_QUEUE_S *pstQueue)
     if(NULL == pstQueue)
     {
         printf("invaild input parameter\n");
-	return ERROR_FAILED;
+	    return ERROR_FAILED;
+    }
+
+    if(QUEUE_SIZE == (QUEUE_SIZE - pstQueue->head + pstQueue->tail)-1 && pstQueue->head != pstQueue->tail)
+    {
+        return pstQueue->head;
     }
     
     if(QUEUE_SIZE == pstQueue->head + 1)
@@ -91,18 +105,55 @@ int DeQueue(TOUPCAM_DATA_QUEUE_S *pstQueue)
     return pstQueue->head;
 }
 
+void Handle3dNoise(TOUPCAM_DATA_QUEUE_S *pstQueue, unsigned int uiIndex, unsigned int uiSize)
+{
+    if(NULL == pstQueue || 0 == uiSize)
+    {
+        return;
+    }
+    unsigned int i;
+    unsigned char ucAverage = 0;
+
+    if(1 == uiIndex)
+    {
+        for(i=0; i<uiSize; i++)
+        {
+            ucAverage = (pstQueue->acdata[uiIndex][i] + pstQueue->acdata[uiIndex-1][i] + pstQueue->acdata[QUEUE_SIZE-1][i])/3;
+            pstQueue->acdata[uiIndex][i] = ucAverage;
+        }
+    }
+    else if(0 == uiIndex)
+    {
+        for(i=0; i<uiSize; i++)
+        {
+            ucAverage = (pstQueue->acdata[uiIndex][i] + pstQueue->acdata[QUEUE_SIZE-1][i] + pstQueue->acdata[QUEUE_SIZE-2][i])/3;
+            pstQueue->acdata[uiIndex][i] = ucAverage;
+        }
+    }
+    else
+    {
+        for(i=0; i<uiSize; i++)
+        {
+            ucAverage = (pstQueue->acdata[uiIndex][i] + pstQueue->acdata[uiIndex-1][i] + pstQueue->acdata[uiIndex-2][i])/3;
+            pstQueue->acdata[uiIndex][i] = ucAverage;
+        }
+    }
+}
+
 void DestoryQueue(TOUPCAM_DATA_QUEUE_S *pstQueue)
 {
     if(NULL == pstQueue)
     {
         printf("invaild input parameter\n");
-	return;
+	    return;
     }
     int i;
     for(i = 0; i < QUEUE_SIZE; i++)
     {
         free(pstQueue->acdata[i]);
     }
+    sem_destroy(&pstQueue->semaphore);
+    pthread_mutex_destroy(&pstQueue->lock);
     free(pstQueue);
 }
 
