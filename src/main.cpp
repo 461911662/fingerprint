@@ -574,7 +574,13 @@ void *pthread_link_task1(void *argv)
         }
 
         /* 更新自动直方图 */
-        pthread_mutex_trylock(&g_PthreadMutexMonitor);
+        iRet = pthread_mutex_trylock(&g_PthreadMutexMonitor);
+        if(0 != iRet)
+        {
+            toupcam_dbg_f(LOG_WARNNING, "g_PthreadMutexMonitor is busy, again try it.");
+            continue;
+        }
+
         if(g_pstTouPcam->stHistoram.bAutoHis)
         {
             hr = Toupcam_LevelRangeAuto(g_pstTouPcam->m_hcam);
@@ -895,6 +901,7 @@ void *pthread_health_monitor(void *pdata)
 {
     HRESULT hr;
     cpu_set_t mask;
+    int iRet = 0;
 
     int processid = distribute_process();
     if(-1 != processid)
@@ -911,7 +918,12 @@ void *pthread_health_monitor(void *pdata)
     while(1)
     {
         sleep(5*60);
-        pthread_mutex_trylock(&g_PthreadMutexMonitor);
+        iRet = pthread_mutex_trylock(&g_PthreadMutexMonitor);
+        if(0 != iRet)
+        {
+            toupcam_dbg_f(LOG_WARNNING, "g_PthreadMutexMonitor is busy, again try it.");
+            continue;
+        }
         /* 同步自动增益 */
         g_pstTouPcam->stTexpo.bAutoAGain = g_pstTouPcam->stTexpo.bAutoAGain;
 
