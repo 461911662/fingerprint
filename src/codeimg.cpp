@@ -363,19 +363,13 @@ MPP_RET mpp_ctx_deinit(MPP_ENC_DATA_S **data)
     MPP_RET ret = MPP_OK;
     MPP_ENC_DATA_S *p = NULL;
 
-    if (!data) 
+    if (!*data || !data) 
     {
         printf("invalid input data %p\n", data);
         return MPP_ERR_NULL_PTR;
     }
-    
     p = *data;
-
-    if(NULL != p)
-    {
-        return ret;
-    }
-    
+ 
     ret = p->mpi->reset(p->ctx);
     if (ret) 
     {

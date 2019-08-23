@@ -1052,6 +1052,13 @@ void export_syncserverdata(int fd)
 		toupcam_log_f(LOG_ERROR, "invaild fd");
 		return;
 	}
+
+    if(!g_pstTouPcam)
+    {
+        toupcam_log_f(LOG_WARNNING, "g_pstTouPcam does not initalize.")
+        return;
+    }
+    
 	int iRet;
 	TOUPCAM_COMMON_REQUES_S data;
 	data.com.type = TCP_REQUEST;
@@ -1070,6 +1077,13 @@ int common_toupcam_cmd(int fd, void *pdata, unsigned short usSize)
         toupcam_dbg_f(LOG_ERROR, "input is invaild.\n");
         return ERROR_FAILED;
     }
+
+    if(!g_pstTouPcam)
+    {
+        toupcam_log_f(LOG_WARNNING, "g_pstTouPcam dost not initalize.");
+        return ERROR_FAILED;
+    }
+    
     TOUPCAM_COMMON_REQUES_S *pstToupcamReq = (TOUPCAM_COMMON_REQUES_S *)pdata;
 
     unsigned short usCmd = 0;

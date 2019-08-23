@@ -559,7 +559,7 @@ void *pthread_link_task1(void *argv)
     stToupcamRespon.com.cmd = COMCMD_TOUPCAMCFG;
     stToupcamRespon.com.subcmd = CMD_DATATSM;
 
-    pcdes = (char *)malloc(sizeof(g_pstTouPcam->stHistoram.aHistY)*4+TOUPCAM_COMMON_RESPON_HEADER_SIZE);
+    pcdes = (char *)malloc(sizeof(stTouPcam.stHistoram.aHistY)*4+TOUPCAM_COMMON_RESPON_HEADER_SIZE);
     if(NULL == pcdes)
     {
         toupcam_log_f(LOG_ERROR, "%s.", strerror(errno));
@@ -568,7 +568,7 @@ void *pthread_link_task1(void *argv)
 
     while(1)
     {
-        if(!g_pstTouPcam->m_hcam)
+        if(!g_pstTouPcam || !g_pstTouPcam->m_hcam)
         {
             continue;
         }
@@ -751,10 +751,10 @@ void *pthread_server(void *pdata)
 						continue;
 					}
 
-                    if(g_pstTouPcam->iconnect)
+                    if(stTouPcam.iconnect)
                     {
-                        toupcam_dbg_f(LOG_INFO, "iconnect_fd:%d,client_fd:%d\n", g_pstTouPcam->iconnect_fd, iClientFd);
-                        iRet = send(g_pstTouPcam->iconnect_fd, "0000\r\n", 6, 0); /* 检查是否断线，重连 */
+                        toupcam_dbg_f(LOG_INFO, "iconnect_fd:%d,client_fd:%d\n", stTouPcam.iconnect_fd, iClientFd);
+                        iRet = send(stTouPcam.iconnect_fd, "0000\r\n", 6, 0); /* 检查是否断线，重连 */
                         toupcam_dbg_f(LOG_INFO, "errno=%s(%d), iRet:%d\n", strerror(errno), errno, iRet);
                         if(0 < iRet)
                         {
@@ -765,8 +765,8 @@ void *pthread_server(void *pdata)
                         }
                         else
                         {
-                            FD_CLR(g_pstTouPcam->iconnect_fd, &rdfs);
-                            close(g_pstTouPcam->iconnect_fd);
+                            FD_CLR(stTouPcam.iconnect_fd, &rdfs);
+                            close(stTouPcam.iconnect_fd);
                         }
                     }
 
@@ -775,8 +775,8 @@ void *pthread_server(void *pdata)
 						iMaxfd = iClientFd;
 					}
 					FD_SET(iClientFd, &rdfs);
-                    g_pstTouPcam->iconnect = 1;
-                    g_pstTouPcam->iconnect_fd = iClientFd;
+                    stTouPcam.iconnect = 1;
+                    stTouPcam.iconnect_fd = iClientFd;
 					toupcam_log_f(LOG_INFO, "tcp(%d) listen(%d)...\n", i, iClientFd);
 					export_syncserverdata(iClientFd);
 					export_syncserverdata(iClientFd);
@@ -785,7 +785,7 @@ void *pthread_server(void *pdata)
 				}
 				else
 				{
-                    toupcam_log(LOG_INFO, "cur socket fd:%d, has socket fd:%d\n", i, g_pstTouPcam->iconnect_fd);
+                    toupcam_log(LOG_INFO, "cur socket fd:%d, has socket fd:%d\n", i, stTouPcam.iconnect_fd);
 					memset(g_cBuffData, 0, ARRAY_SIZE(g_cBuffData));
 					iRet = read(i, g_cBuffData, sizeof(TOUPCAM_COMMON_REQUES_S));
 					if(iRet > 0)
@@ -843,7 +843,7 @@ void *pthread_server(void *pdata)
                             uiSize = stToupcam_common_req.com.size[0];
                         }
                         g_ReqResFlag = stToupcam_common_req.com.type;
-                        if(g_pstTouPcam->iconnect_fd == i)
+                        if(stTouPcam.iconnect_fd == i)
                         {
                             common_hander(i, (void *)&stToupcam_common_req, uiSize);
                         }
@@ -881,10 +881,10 @@ void *pthread_server(void *pdata)
                                 }
                             }
                         }
-                        g_pstTouPcam->iconnect = 0;
-                        g_pstTouPcam->iconnect_fd = 0;
+                        stTouPcam.iconnect = 0;
+                        stTouPcam.iconnect_fd = 0;
                         toupcam_log_f(LOG_INFO, "sock unconnect...\n");
-                        g_pstTouPcam->SaveConfigure(g_pstTouPcam);
+                        stTouPcam.SaveConfigure(g_pstTouPcam);
                         iMaxfd = iServerFd; /* 只需连接一个 */
                         FD_CLR(i, &rdfs);
                         close(i);
@@ -1210,7 +1210,7 @@ void semaphore_inits(void)
     return;
 }
 
-void semaphore_destorys(void)
+void semaphore_destroys(void)
 {
     sem_destroy(&g_SemaphoreHistoram);
     return;
@@ -1461,7 +1461,7 @@ int main(int, char**)
     }
 
     pthread_mutex_destroys();
-    semaphore_destorys();
+    semaphore_destroys();
 
 #ifndef SOFT_ENCODE_H264
     mpp_ctx_deinit(&g_pstmpp_enc_data);

@@ -178,6 +178,12 @@ int common_wifi_cmd(int fd, void *pdata, unsigned short usSize)
         printf("%s: input is invaild.\n", __func__);
         return ERROR_FAILED;
     }
+
+    if(!g_pstTouPcam)
+    {
+        toupcam_log_f(LOG_WARNNING, "g_pstTouPcam dost not initalize.");
+        return ERROR_FAILED;
+    }
     
     TOUPCAM_COMMON_REQUES_S *pstToupcamReq = (TOUPCAM_COMMON_REQUES_S *)pdata;
     unsigned int usCmd = 0;
