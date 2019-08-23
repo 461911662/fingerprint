@@ -91,6 +91,8 @@ sem_t g_SemaphoreHistoram;
 unsigned int *g_puiProcess_task = NULL;
 unsigned int g_uiProcess_num = 0;
 
+extern TOUPCAM_S stTouPcam;
+
 /*handFingerPrintData
 *函数说明：通过算法处理帧数据流InData,然后将处理后的数据返回;
 *参数:

@@ -1055,7 +1055,7 @@ void export_syncserverdata(int fd)
 
     if(!g_pstTouPcam)
     {
-        toupcam_log_f(LOG_WARNNING, "g_pstTouPcam does not initalize.")
+        toupcam_log_f(LOG_WARNNING, "g_pstTouPcam does not initalize.");
         return;
     }
     
