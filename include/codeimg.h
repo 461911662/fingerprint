@@ -4,6 +4,7 @@
 #include "x264.h"
 #include "rtp.h"
 #include "mpp_encode_data.h"
+#include "common_toupcam.h"
 
 
 //#include "../include/libavutil/frame.h"
@@ -19,7 +20,7 @@ typedef struct __X264_ENCODER__
 	int m_x264iNal;
 	FILE *m_x264Fp;
 }X264Encoder;
-#define RGB24_DEPTH  (3)
+#define PIXEL_DEPTH  (BIT_DEPTH8)
 #define INITX264ENCODER_DEFVAL
 
 extern X264Encoder x264Encoder;

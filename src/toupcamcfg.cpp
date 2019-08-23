@@ -144,7 +144,7 @@ static int snapshot(int fd, void *pdata)
             if(NULL == pBuffer)
             {
                 toupcam_dbg_f(LOG_ERROR, "stToupcamRespon.pdata:%s", strerror(errno));
-                pthread_mutex_lock(&g_PthreadMutexJpgDest);
+                pthread_mutex_unlock(&g_PthreadMutexJpgDest);
                 goto _exit0;
             }
 

@@ -307,7 +307,7 @@ void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx)
     {
         case TOUPCAM_EVENT_IMAGE:
 #ifdef FIX_FRAMERATE_QUEUE
-            save_udp_data1();
+            //save_udp_data1();
 #else
             save_udp_data2();
 #endif
@@ -400,8 +400,8 @@ static void save_udp_data1()
     int iResult = 0;
     ToupcamFrameInfoV2 info = { 0 };
 
-    //pthread_mutex_trylock(&g_pstDataQueue->lock);
-    iResult = sem_trywait(&g_pstDataQueue->semaphore);
+    iResult = pthread_mutex_trylock(&g_pstDataQueue->lock);
+    //iResult = sem_trywait(&g_pstDataQueue->semaphore);
     if(0 != iResult)
     {
         return;
@@ -434,7 +434,7 @@ static void save_udp_data1()
         }
 #endif
     }
-    //pthread_mutex_unlock(&g_pstDataQueue->lock);
+    pthread_mutex_unlock(&g_pstDataQueue->lock);
 }
 
 static void save_udp_data2()
@@ -996,11 +996,18 @@ static void handle_udp_data1()
             usleep(100000);
             continue;
         }
+        frame_num++;
+#if 0
+        iResult = pthread_mutex_trylock(&g_pstDataQueue->lock);
+        if(0 != iResult)
+        {
+            continue;
+        }
 
         index = DeQueue(g_pstDataQueue);
         if(-1 == index)
         {
-            continue;
+            //continue;
         }
         
         unsigned char *ndata = (unsigned char *)g_pstDataQueue->acdata[index];
@@ -1019,10 +1026,11 @@ static void handle_udp_data1()
         }
         encode2hardware((unsigned char *)ndata);
 #endif
-        //pthread_mutex_unlock(&g_pstDataQueue->lock);
+        pthread_mutex_unlock(&g_pstDataQueue->lock);
         frame_num++;
         //usleep(10000);
-        sem_post(&g_pstDataQueue->semaphore);
+        //sem_post(&g_pstDataQueue->semaphore);
+#endif
     }
 }
 

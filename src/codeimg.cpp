@@ -942,8 +942,8 @@ int encode_jpeg(unsigned char *pucImageData)
     /* step 3 */
     stcinfo.image_width = g_pstTouPcam->inMaxWidth;
     stcinfo.image_height = g_pstTouPcam->inMaxHeight;
-    stcinfo.input_components = RGB24_DEPTH;
-    stcinfo.in_color_space = JCS_RGB;
+    stcinfo.input_components = PIXEL_DEPTH;
+    stcinfo.in_color_space = (PIXEL_DEPTH == BIT_DEPTH8) ? JCS_GRAYSCALE:JCS_RGB;
 
     /* step 4 */
     jpeg_set_defaults(&stcinfo);
@@ -954,7 +954,7 @@ int encode_jpeg(unsigned char *pucImageData)
 
     while (stcinfo.next_scanline < stcinfo.image_height)
     {
-        row_pointer[0] = & pucImageData[stcinfo.next_scanline * row_stride*RGB24_DEPTH];
+        row_pointer[0] = & pucImageData[stcinfo.next_scanline * row_stride * PIXEL_DEPTH];
         (void) jpeg_write_scanlines(&stcinfo, row_pointer, 1);
     }
 

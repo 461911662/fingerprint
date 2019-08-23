@@ -29,7 +29,11 @@ void common_hander(int fd, void *pBuff, unsigned int uiSize)
     {
         if(pstToupcamReq->com.cmd == g_Comm_Entry[i].cmd_id)
         {
-            pthread_mutex_trylock(&g_PthreadMutexMonitor);
+            iRet = pthread_mutex_trylock(&g_PthreadMutexMonitor);
+            if(0 != iRet)
+            {
+                toupcam_log_f(LOG_WARNNING, "g_Comm_Entry is busy, again try it.");
+            }
             iRet = g_Comm_Entry[i].handle(fd, pstToupcamReq, uiSize);
             printf("request(%d): cmd:%02x,subcmd:%04x,", fd, pstToupcamReq->com.cmd, pstToupcamReq->com.subcmd);
             for(j=0; j<uiSize-4; j++)
