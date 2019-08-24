@@ -165,6 +165,45 @@ int distribute_process()
     return i;
 }
 
+void cancel_distribute_source(const char *pname)
+{
+    if(NULL == pname)
+    {
+        return;
+    }
+    int id;
+    pthread_t pid;
+    char cname[16] = {0};
+
+    for (id = 0; id < MaxThreadNum; ++id)
+    {
+        pid = g_PthreadId[id];
+        if(pid)
+        {
+            pthread_getname_np(pid, cname, 16);
+            char *pc = cname+12;
+            int iProcessid = strtol(pc, NULL, 10);
+            if(!strncmp(cname, pname, strlen(pname)))
+            {
+                if(iProcessid>=0 && iProcessid<g_uiProcess_num && *pc != '_' && *(pc+1) != '_')
+                {
+                    g_puiProcess_task[iProcessid] = 0;
+                    toupcam_log_f(LOG_INFO, "processor id(%d) cancel...\n", iProcessid);
+                }
+                else
+                {
+                    toupcam_log_f(LOG_WARNNING, "abort processor id(%d) cancel...\n", iProcessid);
+                }
+
+                toupcam_log_f(LOG_INFO, "pthread_cancel(%s)...\n", cname);
+                pthread_cancel(pid);
+                g_PthreadId[id] = 0;
+            }
+        }
+    }
+
+}
+
 void signal_interrupt(int event)
 {
     if(SIGINT == event)
@@ -697,9 +736,6 @@ void *pthread_server(void *pdata)
     struct sockaddr stClientaddr;
     socklen_t addrlen = sizeof(struct sockaddr_in);
     cpu_set_t mask;
-    int id;
-    pthread_t pid;
-    char cname[16] = {0};
 
     int processid = distribute_process();
     if(-1 != processid)
@@ -758,17 +794,20 @@ void *pthread_server(void *pdata)
                         toupcam_dbg_f(LOG_INFO, "iconnect_fd:%d,client_fd:%d\n", stTouPcam.iconnect_fd, iClientFd);
                         iRet = send(stTouPcam.iconnect_fd, "0000\r\n", 6, 0); /* 检查是否断线，重连 */
                         toupcam_dbg_f(LOG_INFO, "errno=%s(%d), iRet:%d\n", strerror(errno), errno, iRet);
+                        toupcam_log_f(LOG_WARNNING, "tcp connection has been establishe,new connect(%d), old connect(%d)", iClientFd, stTouPcam.iconnect_fd);
                         if(0 < iRet)
                         {
-                            toupcam_log_f(LOG_WARNNING, "tcp connection has been establishe,new connect(%d), old connect(%d), close new connect\n", iClientFd, g_pstTouPcam->iconnect_fd);
-                            setdisconnecttcp(iClientFd);
-                            close(iClientFd); /* 关掉额外的socket */
-                            continue;
+                            cancel_distribute_source("link_task1");
+                            FD_CLR(stTouPcam.iconnect_fd, &rdfs);
+                            close(stTouPcam.iconnect_fd);
+                            toupcam_log_f(LOG_WARNNING, "tcp close old connect(%d)", stTouPcam.iconnect_fd);
                         }
                         else
                         {
-                            FD_CLR(stTouPcam.iconnect_fd, &rdfs);
-                            close(stTouPcam.iconnect_fd);
+                            setdisconnecttcp(iClientFd);
+                            close(iClientFd); /* 关掉额外的socket */
+                            toupcam_log_f(LOG_WARNNING, "tcp close new connect(%d)", iClientFd);
+                            continue;
                         }
                     }
 
@@ -856,37 +895,14 @@ void *pthread_server(void *pdata)
 					}
                     else
                     {
-                        memset(cname, 0, 128);
-                        for (id = 0; id < MaxThreadNum; ++id)
-                        {
-                            pid = g_PthreadId[id];
-                            if(pid)
-                            {
-                                pthread_getname_np(pid, cname, 16);
-                                char *pc = cname+12;
-                                int iProcessid = strtol(pc, NULL, 10);
-                                if(!strncmp(cname, "link_task1", 10))
-                                {
-                                    if(iProcessid>=0 && iProcessid<g_uiProcess_num && *pc != '_' && *(pc+1) != '_')
-                                    {
-                                        g_puiProcess_task[iProcessid] = 0;
-                                        toupcam_log_f(LOG_INFO, "processor id(%d) cancel...\n", iProcessid);
-                                    }
-                                    else
-                                    {
-                                        toupcam_log_f(LOG_WARNNING, "abort processor id(%d) cancel...\n", iProcessid);
-                                    }
-                                    
-                                    toupcam_log_f(LOG_INFO, "pthread_cancel(%s)...\n", cname);
-                                    pthread_cancel(pid);
-                                    g_PthreadId[id] = 0;
-                                }
-                            }
-                        }
+                        cancel_distribute_source("link_task1");
                         stTouPcam.iconnect = 0;
                         stTouPcam.iconnect_fd = 0;
                         toupcam_log_f(LOG_INFO, "sock unconnect...\n");
-                        stTouPcam.SaveConfigure(g_pstTouPcam);
+                        if(stTouPcam.SaveConfigure)
+                        {
+                            stTouPcam.SaveConfigure(g_pstTouPcam);
+                        }
                         iMaxfd = iServerFd; /* 只需连接一个 */
                         FD_CLR(i, &rdfs);
                         close(i);
