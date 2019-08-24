@@ -756,38 +756,38 @@ void *pthread_server(void *pdata)
     }
     iServerFd = sock1->local;
 
-	struct timeval tv = {5, 0};
-	FD_ZERO(&rdfs);
-	FD_SET(iServerFd, &rdfs);
+    struct timeval tv = {5, 0};
+    FD_ZERO(&rdfs);
+    FD_SET(iServerFd, &rdfs);
     fd_set tmprdfs = rdfs;
-	iMaxfd = iServerFd;
-	while(1)
-	{
-	    sleep(1);
-		tmprdfs = rdfs;
-		iRet = select(iMaxfd+1, &tmprdfs, NULL, NULL, &tv);
-		if(iRet == 0)
-		{
-			//toupcam_log_f(LOG_INFO, "select time out.\n");
-			continue;
-		}
-		else if(iRet < 0)
-		{
-			//toupcam_log_f(LOG_INFO, "select fail.\n");
-			continue;
-		}
-		for(i = 0; i < iMaxfd+1; i++)
-		{
-			if(FD_ISSET(i, &tmprdfs))
-			{
-				if(iServerFd == i)
-				{
-					iClientFd = accept(iServerFd, &stClientaddr, &addrlen);
-					if(iClientFd < 0)
-					{
-						toupcam_log_f(LOG_ERROR, "%s.\n", strerror(errno));
-						continue;
-					}
+    iMaxfd = iServerFd;
+    while(1)
+    {
+        sleep(1);
+        tmprdfs = rdfs;
+        iRet = select(iMaxfd+1, &tmprdfs, NULL, NULL, &tv);
+        if(iRet == 0)
+        {
+            //toupcam_log_f(LOG_INFO, "select time out.\n");
+            continue;
+        }
+        else if(iRet < 0)
+        {
+            //toupcam_log_f(LOG_INFO, "select fail.\n");
+            continue;
+        }
+        for(i = 0; i < iMaxfd+1; i++)
+        {
+            if(FD_ISSET(i, &tmprdfs))
+            {
+                if(iServerFd == i)
+                {
+                    iClientFd = accept(iServerFd, &stClientaddr, &addrlen);
+                    if(iClientFd < 0)
+                    {
+                        toupcam_log_f(LOG_ERROR, "%s.\n", strerror(errno));
+                        continue;
+                    }
 
                     if(stTouPcam.iconnect)
                     {
@@ -795,6 +795,7 @@ void *pthread_server(void *pdata)
                         toupcam_dbg_f(LOG_INFO, "errno=%s(%d), iRet:%d\n", strerror(errno), errno, iRet);
                         toupcam_log_f(LOG_WARNNING, "tcp connection has been establishe,new connect(%d), old connect(%d)", iClientFd, stTouPcam.iconnect_fd);
                         cancel_distribute_source("link_task1");
+                        setdisconnecttcp(stTouPcam.iconnect_fd);
                         FD_CLR(stTouPcam.iconnect_fd, &rdfs);
                         close(stTouPcam.iconnect_fd);
                         toupcam_log_f(LOG_WARNNING, "tcp close old connect(%d) and use new connect(%d)", stTouPcam.iconnect_fd, iClientFd);
@@ -811,30 +812,30 @@ void *pthread_server(void *pdata)
                         }
                     }
 
-					if(iClientFd > iMaxfd)
-					{
-						iMaxfd = iClientFd;
-					}
-					FD_SET(iClientFd, &rdfs);
+                    if(iClientFd > iMaxfd)
+                    {
+                        iMaxfd = iClientFd;
+                    }
+                    FD_SET(iClientFd, &rdfs);
                     stTouPcam.iconnect = 1;
                     stTouPcam.iconnect_fd = iClientFd;
-					toupcam_log_f(LOG_INFO, "tcp(%d) listen(%d)...\n", i, iClientFd);
-					export_syncserverdata(iClientFd);
-					export_syncserverdata(iClientFd);
-					export_syncserverdata(iClientFd);	
+                    toupcam_log_f(LOG_INFO, "tcp(%d) listen(%d)...\n", i, iClientFd);
+                    export_syncserverdata(iClientFd);
+                    export_syncserverdata(iClientFd);
+                    export_syncserverdata(iClientFd);	
                     link_task();
-				}
-				else
-				{
+                }
+                else
+                {
                     toupcam_log(LOG_INFO, "cur socket fd:%d, has socket fd:%d\n", i, stTouPcam.iconnect_fd);
-					memset(g_cBuffData, 0, ARRAY_SIZE(g_cBuffData));
-					iRet = read(i, g_cBuffData, sizeof(TOUPCAM_COMMON_REQUES_S));
-					if(iRet > 0)
-					{
-						char *pcBuffData = strstr(g_cBuffData, "proto");
+                    memset(g_cBuffData, 0, ARRAY_SIZE(g_cBuffData));
+                    iRet = read(i, g_cBuffData, sizeof(TOUPCAM_COMMON_REQUES_S));
+                    if(iRet > 0)
+                    {
+                        char *pcBuffData = strstr(g_cBuffData, "proto");
                         /*
                         char *pcBuff = pcBuffData;
-                        
+
                         while(1)
                         {
                             pcBuff = strstr(pcBuff, "proto");
@@ -850,13 +851,13 @@ void *pthread_server(void *pdata)
                             pcBuff += 5;
                         }
                         */
-                        
-						if(NULL == pcBuffData)
-						{
-							toupcam_log_f(LOG_INFO, "no proto.\n");
-							FD_CLR(i, &tmprdfs);
-							continue;
-						}
+
+                        if(NULL == pcBuffData)
+                        {
+                            toupcam_log_f(LOG_INFO, "no proto.\n");
+                            FD_CLR(i, &tmprdfs);
+                            continue;
+                        }
 
                         if(iRet != sizeof(TOUPCAM_COMMON_REQUES_S))
                         {
@@ -865,19 +866,19 @@ void *pthread_server(void *pdata)
                             continue;
                         }
 
-						/*
-						*debug
-						int k;
-						for(k=0; k<11; k++)
-						{
-							toupcam_log_f(LOG_INFO, "%2x ", g_cBuffData[k]);
-						}
-						toupcam_log_f(LOG_INFO, "\n");
-						*/
-						memcpy(&stToupcam_common_req, pcBuffData, sizeof(TOUPCAM_COMMON_REQUES_S));
+                        /*
+                        *debug
+                        int k;
+                        for(k=0; k<11; k++)
+                        {
+                            toupcam_log_f(LOG_INFO, "%2x ", g_cBuffData[k]);
+                        }
+                        toupcam_log_f(LOG_INFO, "\n");
+                        */
+                        memcpy(&stToupcam_common_req, pcBuffData, sizeof(TOUPCAM_COMMON_REQUES_S));
                         if(!iEndianness)
                         {
-                           uiSize = BIGLITTLESWAP32(stToupcam_common_req.com.size[0]);
+                            uiSize = BIGLITTLESWAP32(stToupcam_common_req.com.size[0]);
                         }
                         else
                         {
@@ -892,7 +893,7 @@ void *pthread_server(void *pdata)
                         {
                             toupcam_log_f(LOG_WARNNING, "refuse to unauthorized socket(%d) entry...", i);
                         }
-					}
+                    }
                     else
                     {
                         cancel_distribute_source("link_task1");
@@ -907,12 +908,12 @@ void *pthread_server(void *pdata)
                         FD_CLR(i, &rdfs);
                         close(i);
                     }
-				}
-			}
-		}
-	}
+                }
+            }
+        }
+    }
 
-	return NULL;
+    return NULL;
 }
 
 void *pthread_health_monitor(void *pdata)
