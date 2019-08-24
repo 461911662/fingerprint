@@ -936,6 +936,11 @@ void *pthread_health_monitor(void *pdata)
 
     while(1)
     {
+        if(!g_pstTouPcam || !g_pstTouPcam->m_hcam)
+        {
+            continue;
+        }
+
         sleep(5*60);
         iRet = pthread_mutex_trylock(&g_PthreadMutexMonitor);
         if(0 != iRet)
