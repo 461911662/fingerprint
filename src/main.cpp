@@ -204,6 +204,50 @@ void cancel_distribute_source(const char *pname)
 
 }
 
+void Destroy_pthread_source()
+{
+    int id;
+    int icomplete = 0;
+    pthread_t pid;
+    void** pret = NULL;
+
+    while(1)
+    {
+        for (id = 0; id < MaxThreadNum; ++id)
+        {
+            pid = g_PthreadId[id];
+            if(pid)
+            {
+                if(0 == pthread_cancel(pid))
+                {
+                    toupcam_log_f(LOG_INFO, "Thread[%u] eixt successfully.", pid);
+                    //pthread_join(pid, pret);
+                    g_PthreadId[id] = 0;
+                }
+            }
+        }
+        for (id = 0,icomplete = 0; id < MaxThreadNum; ++id)
+        {
+            if(0 == g_PthreadId[id])
+            {
+                icomplete++;
+            }
+        }
+
+        if(MaxThreadNum == icomplete)
+        {
+            sleep(3);
+            break;
+        }
+    }
+
+    if(g_puiProcess_task)
+    {
+        free(g_puiProcess_task);
+        g_puiProcess_task = NULL;
+    }
+}
+
 void signal_interrupt(int event)
 {
     if(SIGINT == event)
@@ -568,7 +612,7 @@ void *pthread_link_task1(void *argv)
         {
             toupcam_log_f(LOG_WARNNING, "%s", strerror(errno));
         }
-        toupcam_log_f(LOG_INFO, "thread id(%d) use process(%d)", (int)pthread_self(), processid);
+        toupcam_log_f(LOG_INFO, "thread id(%u) use process(%d)", (unsigned int)pthread_self(), processid);
     }
     
     if(-1 != processid)
@@ -586,6 +630,7 @@ void *pthread_link_task1(void *argv)
         toupcam_log_f(LOG_WARNNING, "%s", strerror(errno));
         goto exit0;
     }
+    pthread_detach(pthread_self());
 
     stToupcamRespon.com.cmd = COMCMD_TOUPCAMCFG;
     sprintf(stToupcamRespon.com.proto, "%s", "proto");
@@ -732,6 +777,7 @@ void *pthread_server(void *pdata)
 {
     int iClientFd, iServerFd, iRet, i;
     unsigned int uiSize = 0;
+    char cname[16] = {0};
     TOUPCAM_COMMON_REQUES_S stToupcam_common_req;
     struct sockaddr stClientaddr;
     socklen_t addrlen = sizeof(struct sockaddr_in);
@@ -746,8 +792,24 @@ void *pthread_server(void *pdata)
         {
             toupcam_log_f(LOG_WARNNING, "%s", strerror(errno));
         }
-        toupcam_log_f(LOG_INFO, "thread id(%d) use process(%d)", (int)pthread_self(), processid);
+        toupcam_log_f(LOG_INFO, "thread id(%u) use process(%d)", (unsigned int)pthread_self(), processid);
     }
+
+    if(-1 != processid)
+    {
+        sprintf(cname, "threadserver%d", processid);
+    }
+    else
+    {
+        sprintf(cname, "threadserver__");
+    }
+
+    iRet = prctl(PR_SET_NAME, cname);
+    if(0 != iRet)
+    {
+        toupcam_log_f(LOG_WARNNING, "%s", strerror(errno));
+    }
+    pthread_detach(pthread_self());
     
     if(sock1->local < 0)
     {
@@ -921,6 +983,7 @@ void *pthread_health_monitor(void *pdata)
     HRESULT hr;
     cpu_set_t mask;
     int iRet = 0;
+    char cname[16] = {0};
 
     int processid = distribute_process();
     if(-1 != processid)
@@ -931,8 +994,24 @@ void *pthread_health_monitor(void *pdata)
         {
             toupcam_log_f(LOG_WARNNING, "%s", strerror(errno));
         }
-        toupcam_log_f(LOG_INFO, "thread id(%d) use process(%d)", (int)pthread_self(), processid);
+        toupcam_log_f(LOG_INFO, "thread id(%u) use process(%d)", (unsigned int)pthread_self(), processid);
     }
+
+    if(-1 != processid)
+    {
+        sprintf(cname, "threadhealth%d", processid);
+    }
+    else
+    {
+        sprintf(cname, "threadhealth__");
+    }
+
+    iRet = prctl(PR_SET_NAME, cname);
+    if(0 != iRet)
+    {
+        toupcam_log_f(LOG_WARNNING, "%s", strerror(errno));
+    }
+    pthread_detach(pthread_self());
 
     while(1)
     {
@@ -994,6 +1073,8 @@ void *pthread_health_monitor(void *pdata)
 void *pthread_udp_distribute(void *pdata)
 {
     cpu_set_t mask;
+    int iRet = 0;
+    char cname[16] = {0};
     int processid = distribute_process();
     if(-1 != processid)
     {
@@ -1003,8 +1084,24 @@ void *pthread_udp_distribute(void *pdata)
         {
             toupcam_log_f(LOG_WARNNING, "%s", strerror(errno));
         }
-        toupcam_log_f(LOG_INFO, "thread id(%d) use process(%d)", (int)pthread_self(), processid);
+        toupcam_log_f(LOG_INFO, "thread id(%u) use process(%d)", (unsigned int)pthread_self(), processid);
     }
+
+    if(-1 != processid)
+    {
+        sprintf(cname, "threadudpput%d", processid);
+    }
+    else
+    {
+        sprintf(cname, "threadudpput__");
+    }
+
+    iRet = prctl(PR_SET_NAME, cname);
+    if(0 != iRet)
+    {
+        toupcam_log_f(LOG_WARNNING, "%s", strerror(errno));
+    }
+    pthread_detach(pthread_self());
 
 #ifdef FIX_FRAMERATE_QUEUE
     handle_udp_data1();
@@ -1020,7 +1117,8 @@ static void handle_udp_data1()
     int iResult = 0;
     while(1)
     {
-        if(NULL == g_pstDataQueue || 0 == g_pstDataQueue->iCnt)
+        if(NULL == g_pstTouPcam || NULL == g_pstTouPcam->m_hcam || NULL == g_pstDataQueue 
+            || 0 == g_pstDataQueue->iCnt)
         {
             sleep(1);
             continue;
@@ -1074,11 +1172,13 @@ static void handle_udp_data2()
 {
     while(1)
     {
-        if(NULL == pstFixFrameRate || 0 == pstFixFrameRate->getQueueNum())
+        if(NULL == g_pstTouPcam || NULL == g_pstTouPcam->m_hcam || NULL == pstFixFrameRate ||
+            0 == pstFixFrameRate->getQueueNum())
         {
             sleep(1);
             continue;
         }
+
         if(pstFixFrameRate->getFixnum() < frame_num)
         {
             usleep(100000);
@@ -1115,9 +1215,27 @@ static void handle_udp_data2()
 
 void Destory_sock(void)
 {
+    /* 异常关闭所监听的描述符 */
+    int i = 0;
+    for(i=3; i<iMaxfd+1; i++)
+    {
+        if(i == sock->local || i == sock1->local)
+        {
+            continue;
+        }
+        else
+        {
+            close(i);
+        }
+    }
+
     if(sock)
     {
         close(sock->local);
+        fclose(sock->in);
+        fclose(sock->out);
+        sock->in = NULL;
+        sock->out = NULL;
         free(sock);
         sock = NULL;
         toupcam_log_f(LOG_INFO, "destory dgram sock...\n");
@@ -1125,16 +1243,15 @@ void Destory_sock(void)
     if(sock1)
     {
         close(sock1->local);
+        fclose(sock1->in);
+        fclose(sock1->out);
+        sock1->in = NULL;
+        sock1->out = NULL;
         free(sock1);
         sock1 = NULL;
         toupcam_log_f(LOG_INFO, "destory stream sock...\n");
     }
-    /* 异常关闭所监听的描述符 */
-    int i = 0;
-    for(i=3; i<iMaxfd+1; i++)
-    {
-        close(i);
-    }
+
     return;
 }
 
@@ -1163,11 +1280,6 @@ void Destory_Toupcam(void)
         destoryHash(g_pstToupcamHashTable);
     }
 
-    if(g_puiProcess_task)
-    {
-        free(g_puiProcess_task);
-        g_puiProcess_task = NULL;
-    }
 #if 0
     if(g_pstTouPcam)
     {
@@ -1464,7 +1576,7 @@ int main(int, char**)
     }
 
     /* 初始化信号 */    
-    iRet = init_signals();
+    //iRet = init_signals();
     if(ERROR_FAILED == iRet)
     {
         goto exit0_;
@@ -1484,14 +1596,14 @@ int main(int, char**)
         goto exit1_;
     }
 
-    pthread_mutex_destroys();
-    semaphore_destroys();
-
 #ifndef SOFT_ENCODE_H264
     mpp_ctx_deinit(&g_pstmpp_enc_data);
 #endif
 
 exit1_:
+    pthread_mutex_destroys();
+    semaphore_destroys();
+    Destroy_pthread_source();
     Destory_Toupcam();
 exit0_:
     Destory_sock();

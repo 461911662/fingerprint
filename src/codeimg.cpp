@@ -870,6 +870,11 @@ int image_arithmetic_handle_rgb(unsigned char *pImageData, int height, int width
 
 void encode_yuv(unsigned char *g_pImageData)
 {
+    if(NULL == g_pstTouPcam || g_pstTouPcam->m_hcam)
+    {
+        return;
+    }
+
     int width = nWidth, height = nHeight;
     enum AVPixelFormat src_pix_fmt = AV_PIX_FMT_GRAY8, dst_pix_fmt = AV_PIX_FMT_YUV420P;
 
