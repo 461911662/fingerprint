@@ -1,5 +1,5 @@
-#ifndef _SOCKET_H_
-#define _SOCKET_H_
+#ifndef _MYSOCKET_H_
+#define _MYSOCKET_H_
 
 /* sock ip */
 #ifdef TOUPCAM_RELEASE

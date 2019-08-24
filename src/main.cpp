@@ -792,22 +792,22 @@ void *pthread_server(void *pdata)
                     if(stTouPcam.iconnect)
                     {
                         toupcam_dbg_f(LOG_INFO, "iconnect_fd:%d,client_fd:%d\n", stTouPcam.iconnect_fd, iClientFd);
-                        iRet = send(stTouPcam.iconnect_fd, "0000\r\n", 6, 0); /* 检查是否断线，重连 */
                         toupcam_dbg_f(LOG_INFO, "errno=%s(%d), iRet:%d\n", strerror(errno), errno, iRet);
                         toupcam_log_f(LOG_WARNNING, "tcp connection has been establishe,new connect(%d), old connect(%d)", iClientFd, stTouPcam.iconnect_fd);
-                        if(0 < iRet)
+                        cancel_distribute_source("link_task1");
+                        FD_CLR(stTouPcam.iconnect_fd, &rdfs);
+                        close(stTouPcam.iconnect_fd);
+                        toupcam_log_f(LOG_WARNNING, "tcp close old connect(%d) and use new connect(%d)", stTouPcam.iconnect_fd, iClientFd);
+                    }
+                    else
+                    {
+                        if(stTouPcam.iconnect_fd) /* 检测死亡fd,关掉多余资源 */
                         {
                             cancel_distribute_source("link_task1");
                             FD_CLR(stTouPcam.iconnect_fd, &rdfs);
                             close(stTouPcam.iconnect_fd);
-                            toupcam_log_f(LOG_WARNNING, "tcp close old connect(%d)", stTouPcam.iconnect_fd);
-                        }
-                        else
-                        {
-                            setdisconnecttcp(iClientFd);
-                            close(iClientFd); /* 关掉额外的socket */
-                            toupcam_log_f(LOG_WARNNING, "tcp close new connect(%d)", iClientFd);
-                            continue;
+                            toupcam_log_f(LOG_WARNNING, "tcp close dead connect(%d)", stTouPcam.iconnect_fd);
+                            stTouPcam.iconnect_fd = 0;
                         }
                     }
 
