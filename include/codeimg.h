@@ -20,7 +20,7 @@ typedef struct __X264_ENCODER__
 	int m_x264iNal;
 	FILE *m_x264Fp;
 }X264Encoder;
-#define PIXEL_DEPTH  (BIT_DEPTH8)
+#define PIXEL_DEPTH  (BIT_DEPTH/BIT_DEPTH8)
 #define INITX264ENCODER_DEFVAL
 
 extern X264Encoder x264Encoder;

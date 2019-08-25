@@ -402,7 +402,7 @@ void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx)
         case TOUPCAM_EVENT_STILLIMAGE:
             toupcam_log_f(LOG_INFO, "toupcam event TOUPCAM_EVENT_STILLIMAGE(%d).\n", nEvent);
             memset(g_pStaticImageData, 0, sizeof(g_pstTouPcam->iSnapSize));
-            hr = Toupcam_PullStillImageV2(g_hcam, NULL, BIT_DEPTH24, &info);
+            hr = Toupcam_PullStillImageV2(g_hcam, NULL, BIT_DEPTH, &info);
             if (FAILED(hr))
                 toupcam_log_f(LOG_INFO, "failed to pull image, hr = %08x\n", hr);
             else
@@ -410,7 +410,7 @@ void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx)
                 /* After we get the image data, we can do anything for the data we want to do */
                 /* toupcam_log_f(LOG_INFO, "pull static image ok, total = %u, resolution = %u x %u\n", ++g_total, info.width, info.height); */
                 
-                hr = Toupcam_PullStillImage(g_hcam, g_pStaticImageData, BIT_DEPTH24, NULL, NULL);
+                hr = Toupcam_PullStillImage(g_hcam, g_pStaticImageData, BIT_DEPTH, NULL, NULL);
                 if (SUCCEEDED(hr))
                 {
                     toupcam_log_f(LOG_INFO, "encode.\n");

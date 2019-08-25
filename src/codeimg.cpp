@@ -940,7 +940,7 @@ int encode_jpeg(unsigned char *pucImageData)
     stcinfo.image_width = g_pstTouPcam->inMaxWidth;
     stcinfo.image_height = g_pstTouPcam->inMaxHeight;
     stcinfo.input_components = PIXEL_DEPTH;
-    stcinfo.in_color_space = (PIXEL_DEPTH == BIT_DEPTH8) ? JCS_GRAYSCALE:JCS_RGB;
+    stcinfo.in_color_space = 1==PIXEL_DEPTH?JCS_GRAYSCALE:JCS_RGB;
 
     /* step 4 */
     jpeg_set_defaults(&stcinfo);
