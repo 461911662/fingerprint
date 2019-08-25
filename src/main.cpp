@@ -252,11 +252,13 @@ void signal_interrupt(int event)
 {
     if(SIGINT == event)
     {
-        sleep(5);
-        toupcam_log(LOG_INFO, "main exit, os reboot in the future.");
-        sleep(10);
+        toupcam_log(LOG_INFO, "main exit, os reboot in the future.");        
+        isiExitMainProcess = ERROR_FAILED;
+        cancel_distribute_source("threadserver");
+        sleep(30);
+#ifdef INTERRUPT_OS_REBOOT
         system("/sbin/reboot");
-        //exit(0);
+#endif
     }
 }
 
@@ -291,7 +293,7 @@ void timer_handler(int signo)
         ucframenum = 0;
         ucbreak = 0;
     }
-    
+
    	if(frame_size > 0)
     {
         pthread_mutex_trylock(&g_PthreadMutexUDP);
@@ -842,6 +844,10 @@ void *pthread_server(void *pdata)
         }
         for(i = 0; i < iMaxfd+1; i++)
         {
+            if(ERROR_FAILED == isiExitMainProcess)
+            {
+                break;
+            }
             if(FD_ISSET(i, &tmprdfs))
             {
                 if(iServerFd == i)
@@ -1440,6 +1446,7 @@ static int SetupToupcam(void)
     iRet = g_pstTouPcam->StartDevice((void *)g_pstTouPcam);
     if(ERROR_FAILED == iRet)
     {
+        g_pstTouPcam->CloseDevice((void *)g_pstTouPcam);
         return ERROR_FAILED;
     }    
 
@@ -1585,18 +1592,18 @@ int main(int, char**)
         goto exit0_;
     }
 
-    /* 初始化信号 */    
-    //iRet = init_signals();
-    if(ERROR_FAILED == iRet)
-    {
-        goto exit0_;
-    }
-
     /* 初始化配置保存 */
     g_pstToupcamHashTable = createHash();
     if(NULL == g_pstToupcamHashTable)
     {
         goto exit0_;
+    }
+
+    /* 初始化信号 */    
+    iRet = init_signals();
+    if(ERROR_FAILED == iRet)
+    {
+        goto exit1_;
     }
 
     /* 启动摄像头 */
