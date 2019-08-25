@@ -59,6 +59,7 @@ void* g_pStaticImageData = NULL;
 MPP_ENC_DATA_S *g_pstmpp_enc_data = NULL;
 int g_pStaticImageDataFlag = 0; /* 检测静态图片是否捕获完成 */
 HashTable *g_pstToupcamHashTable = NULL;
+int isiExitMainProcess = ERROR_SUCCESS;
 
 unsigned g_total = 0;
 
@@ -221,7 +222,6 @@ void Destroy_pthread_source()
                 if(0 == pthread_cancel(pid))
                 {
                     toupcam_log_f(LOG_INFO, "Thread[%u] eixt successfully.", pid);
-                    //pthread_join(pid, pret);
                     g_PthreadId[id] = 0;
                 }
             }
@@ -234,7 +234,7 @@ void Destroy_pthread_source()
             }
         }
 
-        if(MaxThreadNum == icomplete)
+        if(MaxThreadNum == icomplete || ERROR_FAILED == isiExitMainProcess)
         {
             sleep(3);
             break;
@@ -810,11 +810,12 @@ void *pthread_server(void *pdata)
     {
         toupcam_log_f(LOG_WARNNING, "%s", strerror(errno));
     }
-    pthread_detach(pthread_self());
+    //pthread_detach(pthread_self()); disable function
     
     if(sock1->local < 0)
     {
         toupcam_log_f(LOG_INFO, "socket fd(%d).\n", sock1->local);
+        isiExitMainProcess = ERROR_FAILED;
         return NULL;
     }
     iServerFd = sock1->local;
@@ -1606,13 +1607,12 @@ int main(int, char**)
     }
 
 exit1_:
+    Destroy_pthread_source();
 #ifndef SOFT_ENCODE_H264
     mpp_ctx_deinit(&g_pstmpp_enc_data);
 #endif
-
     pthread_mutex_destroys();
     semaphore_destroys();
-    Destroy_pthread_source();
     Destory_Toupcam();
 exit0_:
     Destory_sock();

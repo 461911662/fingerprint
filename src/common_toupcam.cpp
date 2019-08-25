@@ -41,6 +41,7 @@ extern HashTable *g_pstToupcamHashTable;
 extern FixFrameRate *pstFixFrameRate;
 extern TOUPCAM_DATA_QUEUE_S *g_pstDataQueue;
 extern int frame_num;
+extern int isiExitMainProcess;
 
 
 #define CALLBAK_TOUPCAM_KIT 1
@@ -546,7 +547,8 @@ unsigned int StartDevice(void *pvoid)
         for(int i = 0; i < g_PthreadMaxNum; i++)
         {
             void** pret = NULL;
-            pthread_join(g_PthreadId[i], pret);    
+            pthread_join(g_PthreadId[i], pret);
+            isiExitMainProcess = ERROR_FAILED;
         }
 /* cpu is high
         while(1)
