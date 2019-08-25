@@ -60,6 +60,7 @@ MPP_ENC_DATA_S *g_pstmpp_enc_data = NULL;
 int g_pStaticImageDataFlag = 0; /* 检测静态图片是否捕获完成 */
 HashTable *g_pstToupcamHashTable = NULL;
 int isiExitMainProcess = ERROR_SUCCESS;
+int iSartRecieveCmd = ERROR_FAILED;
 
 unsigned g_total = 0;
 
@@ -956,7 +957,7 @@ void *pthread_server(void *pdata)
                             uiSize = stToupcam_common_req.com.size[0];
                         }
                         g_ReqResFlag = stToupcam_common_req.com.type;
-                        if(stTouPcam.iconnect_fd == i)
+                        if(stTouPcam.iconnect_fd == i && ERROR_SUCCESS == iSartRecieveCmd)
                         {
                             common_hander(i, (void *)&stToupcam_common_req, uiSize);
                         }
@@ -1158,6 +1159,7 @@ static void handle_udp_data1()
         unsigned char *ndata = (unsigned char *)g_pstDataQueue->acdata[index];
         if(NULL == ndata)
         {
+            sem_post(&g_pstDataQueue->semaphore);
             continue;
         }
 

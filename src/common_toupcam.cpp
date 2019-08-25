@@ -42,6 +42,7 @@ extern FixFrameRate *pstFixFrameRate;
 extern TOUPCAM_DATA_QUEUE_S *g_pstDataQueue;
 extern int frame_num;
 extern int isiExitMainProcess;
+extern int iSartRecieveCmd;
 
 
 #define CALLBAK_TOUPCAM_KIT 1
@@ -544,6 +545,7 @@ unsigned int StartDevice(void *pvoid)
         }
         toupcam_log_f(LOG_WARNNING, "exit when an exception occurs.\n");
 
+        iSartRecieveCmd = ERROR_SUCCESS;
         for(int i = 0; i < g_PthreadMaxNum; i++)
         {
             void** pret = NULL;
