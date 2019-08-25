@@ -1279,14 +1279,6 @@ void Destory_Toupcam(void)
     {
         destoryHash(g_pstToupcamHashTable);
     }
-
-#if 0
-    if(g_pstTouPcam)
-    {
-        free(g_pstTouPcam);
-        g_pstTouPcam = NULL;
-    }
-#endif   
 }
 
 int init_sock(void)
@@ -1357,7 +1349,12 @@ void pthread_mutex_inits(void)
     /* 初始化jpeg线程数据保护锁 */
     pthread_mutex_init(&g_PthreadMutexJpgDest, NULL);
     pthread_mutex_init(&g_PthreadMutexMonitor, NULL);
-    pthread_mutex_init(&g_PthreadMutexUDP, NULL); 
+    pthread_mutex_init(&g_PthreadMutexUDP, NULL);
+    pthread_mutex_init(&stTouPcam.stTexpo.mutex, NULL);
+    pthread_mutex_init(&stTouPcam.stWhiteBlc.mutex, NULL);
+    pthread_mutex_init(&stTouPcam.stBlackBlc.mutex, NULL);
+    pthread_mutex_init(&stTouPcam.stTcolor.mutex, NULL);
+    pthread_mutex_init(&stTouPcam.stHistoram.mutex, NULL);
     return;
 }
 
@@ -1367,6 +1364,11 @@ void pthread_mutex_destroys()
     pthread_mutex_destroy(&g_PthreadMutexJpgDest);
     pthread_mutex_destroy(&g_PthreadMutexMonitor);
     pthread_mutex_destroy(&g_PthreadMutexUDP);
+    pthread_mutex_destroy(&stTouPcam.stTexpo.mutex);
+    pthread_mutex_destroy(&stTouPcam.stWhiteBlc.mutex);
+    pthread_mutex_destroy(&stTouPcam.stBlackBlc.mutex);
+    pthread_mutex_destroy(&stTouPcam.stTcolor.mutex);
+    pthread_mutex_destroy(&stTouPcam.stHistoram.mutex);
     return;
 }
 
@@ -1380,7 +1382,11 @@ static int SetupToupcam(void)
     char cPathCfg[128] = {0};
     snprintf(cPathCfg, 128, "%s%s", TOUPCAM_CFG_PATH, TOUCPAM_CFG_NAME);
     iRet = init_Toupcam((void *)g_pstTouPcam);
-    iRet += g_pstTouPcam->OpenDevice();
+    if(ERROR_FAILED == iRet)
+    {
+        return ERROR_FAILED;
+    }
+    iRet = g_pstTouPcam->OpenDevice();
     if(ERROR_FAILED == iRet)
     {
         return ERROR_FAILED;

@@ -438,6 +438,13 @@ unsigned int OpenDevice()
         toupcam_log_f(LOG_ERROR, "no Toupcam device.\n");
         return ERROR_FAILED;
     }
+
+    if(!g_pstTouPcam)
+    {
+        toupcam_log_f(LOG_ERROR, "g_pstTouPcam is invalid.");
+        return ERROR_FAILED;
+    }
+    
     g_pstTouPcam->m_hcam = g_hcam;
 
     return ERROR_SUCCESS;
@@ -475,8 +482,11 @@ unsigned int StartDevice(void *pvoid)
     pToupcam->m_pImageData = g_pImageData;
 
     /* 创建固定帧循环队列 */
-    pstFixFrameRate = new FixFrameRate(g_pstTouPcam->inHeight, g_pstTouPcam->inWidth, BIT_DEPTH, FIX_FRAMERATE);
+#ifdef FIX_FRAMERATE_QUEUE
     g_pstDataQueue = CreateQueue(g_pstTouPcam->inHeight, g_pstTouPcam->inWidth, BIT_DEPTH);
+#else
+    pstFixFrameRate = new FixFrameRate(g_pstTouPcam->inHeight, g_pstTouPcam->inWidth, BIT_DEPTH, FIX_FRAMERATE);
+#endif
 
     /* buffer2 static picture */
     if(pToupcam->iSnapSize > 0)
@@ -758,21 +768,7 @@ __weak void OnEventStillImage(){};
 static unsigned int _init(void)
 {
     int iRet = ERROR_SUCCESS;
-#if 0
-    /*申请Toupcam数据*/
-    if(NULL != g_pstTouPcam)
-    {
-        free(g_pstTouPcam);
-        g_pstTouPcam = NULL;
-    }
 
-    g_pstTouPcam = (TOUPCAM_S *)malloc(sizeof(TOUPCAM_S));
-    if(NULL == g_pstTouPcam)
-    {
-        perror("_init");
-        return ERROR_FAILED;
-    }
-#endif
     g_pstTouPcam = &stTouPcam;
     memset(g_pstTouPcam, 0, sizeof(TOUPCAM_S));
 
@@ -817,9 +813,6 @@ static unsigned int SetAutoExpo_Toupcam()
         return ERROR_FAILED;
     }
 
-    /*初始化自动曝光锁*/
-    pthread_mutex_init(&g_pstTouPcam->stTexpo.mutex, NULL);
-    
     pthread_mutex_lock(&g_pstTouPcam->stTexpo.mutex);
     Toupcam_get_AutoExpoEnable(g_pstTouPcam->m_hcam, &g_pstTouPcam->stTexpo.bAutoExposure);
     if(g_pstTouPcam->stTexpo.bAutoExposure)
@@ -870,9 +863,6 @@ static unsigned int SetReAutoExpo_Toupcam()
         toupcam_log_f(LOG_ERROR, "m_hcam is null.\n");
         return ERROR_FAILED;
     }
-
-    /*初始化自动曝光锁*/
-    pthread_mutex_init(&g_pstTouPcam->stTexpo.mutex, NULL);
     
     pthread_mutex_lock(&g_pstTouPcam->stTexpo.mutex);
 
@@ -924,7 +914,6 @@ static unsigned int Set_BlackBalanceToupcam()
     /* 更新黑平衡 */
     fnBBProc = _PITOUPCAM_BLACKBALANCE_CALLBACK;
 
-    pthread_mutex_init(&g_pstTouPcam->stBlackBlc.mutex, NULL);
     pthread_mutex_lock(&g_pstTouPcam->stBlackBlc.mutex);
 #if 0
     /* special RGB offset */
@@ -987,7 +976,6 @@ static unsigned int Set_ReBlackBalanceToupcam()
     /* 更新黑平衡 */
     fnBBProc = _PITOUPCAM_BLACKBALANCE_CALLBACK;
 
-    pthread_mutex_init(&g_pstTouPcam->stBlackBlc.mutex, NULL);
     pthread_mutex_lock(&g_pstTouPcam->stBlackBlc.mutex);
 
     if(g_pstTouPcam->stBlackBlc.iauto)
@@ -1047,9 +1035,7 @@ static unsigned int Set_WhiteBalanceToupcam()
 
     /* 更新白平衡回调函数 */
     fnTTProc = _PITOUPCAM_WHITEBALANCE_CALLBACK;
-    
-    /* 初始化锁 */
-    pthread_mutex_init(&g_pstTouPcam->stWhiteBlc.mutex, NULL);
+
     pthread_mutex_lock(&g_pstTouPcam->stWhiteBlc.mutex);
 
 #if 0 /* not support */
@@ -1124,9 +1110,6 @@ static unsigned int Set_ReWhiteBalanceToupcam()
 
     /* 更新白平衡 */
     fnTTProc = _PITOUPCAM_WHITEBALANCE_CALLBACK;
-
-    /* 初始化锁 */
-    pthread_mutex_init(&g_pstTouPcam->stWhiteBlc.mutex, NULL);
 
     /* set auto white balance mode as Temp/Tint */
     /* auto white balance "one push". This function must be called AFTER Toupcam_StartXXXX */
@@ -1208,8 +1191,7 @@ static unsigned int Set_ColorToupcam()
         toupcam_log_f(LOG_ERROR, "g_pstToupcam is null\n");
         return ERROR_FAILED;
     }
-    /*初始化自动曝光锁*/
-    pthread_mutex_init(&g_pstTouPcam->stTcolor.mutex, NULL);
+
     pthread_mutex_lock(&g_pstTouPcam->stTcolor.mutex);
     g_pstTouPcam->stTcolor.Contrast = 0;
     HRESULT hr;
@@ -1270,8 +1252,7 @@ static unsigned int Set_ReColorToupcam()
     }
 
     HRESULT hr;
-    /*初始化自动曝光锁*/
-    pthread_mutex_init(&g_pstTouPcam->stTcolor.mutex, NULL);
+
     pthread_mutex_lock(&g_pstTouPcam->stTcolor.mutex);
 
     if(0 != g_pstTouPcam->stTcolor.Contrast)
@@ -1314,8 +1295,6 @@ static unsigned int Set_ReColorToupcam()
 static unsigned int Set_HistogramToupcam()
 {
     HRESULT hr;
-    /* 初始化直方图数据锁 */
-    pthread_mutex_init(&g_pstTouPcam->stHistoram.mutex, NULL);
 
     pthread_mutex_lock(&g_pstTouPcam->stHistoram.mutex);
     g_pstTouPcam->stHistoram.bAutoHis = 0;
@@ -1376,8 +1355,6 @@ static unsigned int Set_HistogramToupcam()
 static unsigned int Set_ReHistogramToupcam()
 {
     HRESULT hr;
-    /* 初始化直方图数据锁 */
-    pthread_mutex_init(&g_pstTouPcam->stHistoram.mutex, NULL);
 
     pthread_mutex_lock(&g_pstTouPcam->stHistoram.mutex);    
     /* 设置直方图为自动         */
@@ -1538,12 +1515,12 @@ static unsigned int Set_ReToupcamOrientation()
 */
 unsigned int init_Toupcam(void *pdata)
 {
+    int iRet = ERROR_SUCCESS;
     if(NULL != pdata)
     {
-        free(pdata);
-        pdata = NULL;
+        toupcam_log_f(LOG_ERROR, "pdata is not nullptr");
+        return ERROR_FAILED;
     }
-    int iRet = ERROR_SUCCESS;
 
     /*初始化Toupcam数据结构中必要的函数*/
     iRet = _init();
