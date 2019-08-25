@@ -918,8 +918,6 @@ int encode_jpeg(unsigned char *pucImageData)
 
     pthread_mutex_lock(&g_PthreadMutexJpgDest);
 
-
-
     struct jpeg_compress_struct stcinfo;
     struct jpeg_error_mgr stjerr;
     FILE *pfile = NULL;
@@ -950,18 +948,15 @@ int encode_jpeg(unsigned char *pucImageData)
     jpeg_start_compress(&stcinfo, TRUE);
     row_stride = g_pstTouPcam->inMaxWidth;
 
-
     while (stcinfo.next_scanline < stcinfo.image_height)
     {
         row_pointer[0] = & pucImageData[stcinfo.next_scanline * row_stride * PIXEL_DEPTH];
         (void) jpeg_write_scanlines(&stcinfo, row_pointer, 1);
     }
 
-
     /* step 5 */
     jpeg_finish_compress(&stcinfo);
     jpeg_destroy_compress(&stcinfo);
-
 
     if(g_pStaticImageDataFlag)
     {

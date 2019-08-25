@@ -134,7 +134,9 @@ static int snapshot(int fd, void *pdata)
     }
     else
     {
+        toupcam_dbg_f(LOG_INFO, "send snopshot successfuly(%d)!\n", hr);
         while(!g_pStaticImageDataFlag);
+        toupcam_dbg_f(LOG_INFO, "recieve picture successfuly!\n");
         pthread_mutex_lock(&g_PthreadMutexJpgDest);
         if(g_pstTouPcam->inMaxWidth > 0 && g_pstTouPcam->inMaxHeight > 0)
         {

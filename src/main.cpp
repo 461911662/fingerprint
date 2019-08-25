@@ -394,7 +394,7 @@ void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx)
     {
         case TOUPCAM_EVENT_IMAGE:
 #ifdef FIX_FRAMERATE_QUEUE
-            //save_udp_data1();
+            save_udp_data1();
 #else
             save_udp_data2();
 #endif
@@ -402,7 +402,7 @@ void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx)
         case TOUPCAM_EVENT_STILLIMAGE:
             toupcam_log_f(LOG_INFO, "toupcam event TOUPCAM_EVENT_STILLIMAGE(%d).\n", nEvent);
             memset(g_pStaticImageData, 0, sizeof(g_pstTouPcam->iSnapSize));
-            hr = Toupcam_PullStillImageV2(g_hcam, NULL, BIT_DEPTH, &info);
+            hr = Toupcam_PullStillImageV2(g_hcam, NULL, BIT_DEPTH24, &info);
             if (FAILED(hr))
                 toupcam_log_f(LOG_INFO, "failed to pull image, hr = %08x\n", hr);
             else
@@ -410,7 +410,7 @@ void __stdcall EventCallback(unsigned nEvent, void* pCallbackCtx)
                 /* After we get the image data, we can do anything for the data we want to do */
                 /* toupcam_log_f(LOG_INFO, "pull static image ok, total = %u, resolution = %u x %u\n", ++g_total, info.width, info.height); */
                 
-                hr = Toupcam_PullStillImage(g_hcam, g_pStaticImageData, BIT_DEPTH, NULL, NULL);
+                hr = Toupcam_PullStillImage(g_hcam, g_pStaticImageData, BIT_DEPTH24, NULL, NULL);
                 if (SUCCEEDED(hr))
                 {
                     toupcam_log_f(LOG_INFO, "encode.\n");
@@ -487,8 +487,8 @@ static void save_udp_data1()
     int iResult = 0;
     ToupcamFrameInfoV2 info = { 0 };
 
-    iResult = pthread_mutex_trylock(&g_pstDataQueue->lock);
-    //iResult = sem_trywait(&g_pstDataQueue->semaphore);
+    //iResult = pthread_mutex_trylock(&g_pstDataQueue->lock);
+    iResult = sem_wait(&g_pstDataQueue->semaphore);
     if(0 != iResult)
     {
         return;
@@ -521,7 +521,8 @@ static void save_udp_data1()
         }
 #endif
     }
-    pthread_mutex_unlock(&g_pstDataQueue->lock);
+    //pthread_mutex_unlock(&g_pstDataQueue->lock);
+    sem_post(&g_pstDataQueue->semaphore);
 }
 
 static void save_udp_data2()
@@ -1140,9 +1141,9 @@ static void handle_udp_data1()
             usleep(100000);
             continue;
         }
-        frame_num++;
-#if 0
-        iResult = pthread_mutex_trylock(&g_pstDataQueue->lock);
+
+        //iResult = pthread_mutex_trylock(&g_pstDataQueue->lock);
+        iResult = sem_wait(&g_pstDataQueue->semaphore);
         if(0 != iResult)
         {
             continue;
@@ -1170,11 +1171,10 @@ static void handle_udp_data1()
         }
         encode2hardware((unsigned char *)ndata);
 #endif
-        pthread_mutex_unlock(&g_pstDataQueue->lock);
         frame_num++;
         //usleep(10000);
-        //sem_post(&g_pstDataQueue->semaphore);
-#endif
+        //pthread_mutex_unlock(&g_pstDataQueue->lock);
+        sem_post(&g_pstDataQueue->semaphore);
     }
 }
 
