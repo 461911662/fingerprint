@@ -1596,11 +1596,11 @@ int main(int, char**)
         goto exit1_;
     }
 
+exit1_:
 #ifndef SOFT_ENCODE_H264
     mpp_ctx_deinit(&g_pstmpp_enc_data);
 #endif
 
-exit1_:
     pthread_mutex_destroys();
     semaphore_destroys();
     Destroy_pthread_source();
