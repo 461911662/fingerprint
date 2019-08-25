@@ -656,11 +656,12 @@ void *pthread_link_task1(void *argv)
     {
         if(!g_pstTouPcam || !g_pstTouPcam->m_hcam)
         {
+            TOUPCAM_STARTDELEAY;
             continue;
         }
 
         /* 更新自动直方图 */
-        iRet = pthread_mutex_trylock(&g_PthreadMutexMonitor);
+        iRet = pthread_mutex_lock(&g_PthreadMutexMonitor);
         if(0 != iRet)
         {
             toupcam_dbg_f(LOG_WARNNING, "g_PthreadMutexMonitor is busy, again try it.");
@@ -1017,11 +1018,12 @@ void *pthread_health_monitor(void *pdata)
     {
         if(!g_pstTouPcam || !g_pstTouPcam->m_hcam)
         {
+            TOUPCAM_STARTDELEAY;
             continue;
         }
 
         sleep(5*60);
-        iRet = pthread_mutex_trylock(&g_PthreadMutexMonitor);
+        iRet = pthread_mutex_lock(&g_PthreadMutexMonitor);
         if(0 != iRet)
         {
             toupcam_dbg_f(LOG_WARNNING, "g_PthreadMutexMonitor is busy, again try it.");
@@ -1102,6 +1104,7 @@ void *pthread_udp_distribute(void *pdata)
         toupcam_log_f(LOG_WARNNING, "%s", strerror(errno));
     }
     pthread_detach(pthread_self());
+    TOUPCAM_STARTDELEAY;
 
 #ifdef FIX_FRAMERATE_QUEUE
     handle_udp_data1();

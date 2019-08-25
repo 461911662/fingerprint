@@ -175,7 +175,7 @@ static void *pthread_running(void *_val)
     int iRet = ERROR_SUCCESS;
     pthread_detach(pthread_self());
     toupcam_log_f(LOG_INFO, "task thread is running");
-    sleep(5); /* 等待摄像机的启动 */
+    TOUPCAM_STARTDELEAY; /* 等待摄像机的启动 */
 
     /* 设置Toupcam自动曝光 */
     iRet = SetAutoExpo_Toupcam();
@@ -541,7 +541,7 @@ unsigned int StartDevice(void *pvoid)
         {
             SufInitialDevice(g_pstTouPcam);
         }
-        toupcam_log_f(LOG_WARNNING, "press any B/b to exit\n");
+        toupcam_log_f(LOG_WARNNING, "exit when an exception occurs.\n");
 
         for(int i = 0; i < g_PthreadMaxNum; i++)
         {

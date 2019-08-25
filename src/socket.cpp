@@ -29,7 +29,7 @@ void common_hander(int fd, void *pBuff, unsigned int uiSize)
     {
         if(pstToupcamReq->com.cmd == g_Comm_Entry[i].cmd_id)
         {
-            iRet = pthread_mutex_trylock(&g_PthreadMutexMonitor);
+            iRet = pthread_mutex_lock(&g_PthreadMutexMonitor);
             if(0 != iRet)
             {
                 toupcam_log_f(LOG_WARNNING, "g_PthreadMutexMonitor is busy, again try it.");

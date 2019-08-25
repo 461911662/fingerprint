@@ -56,6 +56,8 @@
 #define BIGLITTLESWAP32(A) ((A&0xff)<<24 | (A&0xff00)<<8 | (A&0xff0000)>>8 | (A&0xff000000)>>24)
 #define BIGLITTLESWAP16(A) ((A&0xff)<<8 | (A&0xff00)>>8)
 
+#define TOUPCAM_STARTDELEAY sleep(5);
+
 enum TOUPCAM_CMD_E{
     /* toupcam cfg */
     CMD_FIRST,
